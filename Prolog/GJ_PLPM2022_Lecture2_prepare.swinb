@@ -1,0 +1,45 @@
+<div class="notebook">
+
+<div class="nb-cell markdown" name="md3">
+# Preparation Lecture 2
+Prepare chapter 2: Syntax and Meaning of Prolog Programs, 32-60
+
+2.1 Data objects 32 
+
+2.2 Matching 39 
+
+2.3 Declarative meaning of Prolog programs 44 
+
+2.4 Procedural meaning 47
+</div>
+
+<div class="nb-cell markdown" name="md2">
+## 2.1 Data Objects
+- What are the data objects in our Family program?
+- Make exercise 2.1 p. 39.
+- What is the syntax tree of the Prolog term:  =|3*a + b*5|= ?
+</div>
+
+<div class="nb-cell markdown" name="md1">
+## 2.2 Matching
+- Make exercise 2.3 p. 44.
+- Consult the SWI-Prolog manual and look in section 4.6 for the specification of =/2.
+</div>
+
+<div class="nb-cell markdown" name="md4">
+## 2.3 Declarative meaning and 2.4 Procedural meaning
+- Read sections 2 and 3 of the tutorial "Drawing Prolog Search Trees: A Manual for Teachers and Students of Logic Programming" of J. Bos.
+- Convince yourself that the search trees are a visualization of the procedure **execute** (on page 48 and 49).
+- Draw the search tree (as explained in this tutorial) for the example of Figure 2.10.
+</div>
+
+<div class="nb-cell markdown" name="md5">
+Consider the following Prolog clause and query:
+</div>
+
+<div class="nb-cell program" name="p3">
+q(Z,X,Y,b) :- s(date(X,Y),k).
+?- q(X,Y,B,C),r(Y,Z),s(a,C,Z).
+</div>
+
+</div>

@@ -1,0 +1,203 @@
+<div class="notebook">
+
+<div class="nb-cell markdown" name="md2">
+# PLPM Lecture 1 (30/09/2022)
+
+overview basics mechanisms of Prolog:
+ facts and rules, pattern matching (aka unification), backtracking, and distinction between declarative and procedural meanings.
+
+1.1 An example program: definining Family relations &lt;br/&gt;
+1.2 Extending the program with rules
+
+
+## 1.1 An example program: definining Family relations
+
+In logic programming we use *relations* to express relationships between *objects*.
+
+Let us consider the parent relation: e.g.,  Tom is a parent of Bob.
+
+What are the objects in this context? your family?
+</div>
+
+<div class="nb-cell markdown" name="md1">
+In Prolog, *predicates* express relationships between their *arguments*. Predicates correspond to relations and the arguments to the objects.
+</div>
+
+<div class="nb-cell program" name="p2">
+% Tom is a parent of Bob.
+</div>
+
+<div class="nb-cell markdown" name="md3">
+What is the Prolog predicate?
+
+The arguments are Prolog terms: e.g. an atom, (a number, a variable or a structured object (aka structure)). 
+
+Consider the following Family Database given by the Prolog predicate parent.
+</div>
+
+<div class="nb-cell program" data-background="true" name="p3">
+parent(pam,bob).
+parent(tom,bob).
+parent(tom,liz).
+parent(bob,ann).
+parent(bob,pat).
+parent(pat,jim).
+</div>
+
+<div class="nb-cell markdown" name="md4">
+The predicate parent/2 represents the parent relation (6 tuples in the relation).
+
+In Prolog terms: the predicate parent/2 is defined by 6 *facts*.
+
+Now, we can ask simple questions about the parent relation. In Prolog we call them *queries*.
+</div>
+
+<div class="nb-cell program" name="p4">
+% Is bob the parent of pat?
+
+% Is bob the parent of toon?
+
+% Who is the parent of liz?
+
+% Who are Bob's childeren?
+
+% Who is the parent of whom?
+</div>
+
+<div class="nb-cell markdown" name="md5">
+Note: syntax of an atom versus syntax of a Prolog *variable*.
+
+A more advanced question: who is a grandparent of jim? 
+
+Formulation in English: G is grandparent of jim if ....
+</div>
+
+<div class="nb-cell program" name="p5">
+%
+</div>
+
+<div class="nb-cell markdown" name="md6">
+Notice: occurrences of Prolog variables, conjunction of (simple) queries, aka goals.
+
+Another advanced question: Do ann and pat have a common parent?
+</div>
+
+<div class="nb-cell markdown" name="md7">
+## Overview terminology 
+
+* The parent predicate, =parent/2=, has 2 arguments (binary relation).
+
+In general a predicate can have n (n &gt;= 0) arguments (n-tuples).
+
+* The arguments are Prolog terms: 
+	- atoms: =|tom,ann|= 
+	- variables: =|X,Y,NameOfParent|= 
+    - numbers: =|1, 2.5, -7|= 
+
+* A sequence of goals: *conjunction* of goals.
+
+* A query is satisfiable if we get as answer (X = .../true); the query succeeds
+
+* A query is unsatisfiable if the answer is false; the query fails.
+
+* If several answers satisfy the query, then Prolog will find  *all answers* by *backtracking*.
+</div>
+
+<div class="nb-cell markdown" name="md8">
+## 1.2 Extending the program with rules
+
+### Gender relation
+
+How to express the gender information of a person as a relation/predicate?
+</div>
+
+<div class="nb-cell program" name="p6">
+%
+
+
+%
+</div>
+
+<div class="nb-cell markdown" name="md9">
+### Offspring relation
+
+How to express that bob is an offspring of tom?
+</div>
+
+<div class="nb-cell program" name="p7">
+%
+
+
+%
+</div>
+
+<div class="nb-cell markdown" name="md10">
+## Prolog rules
+
+Facts are a special case, expressing that something is always true, cfr =|parent/2|= facts.
+
+A rule expresses that something is true if some condition is satisfied: the lhs/ *conclusion* of a rule is true if the rhs/ *condition*  is satisfied.
+</div>
+
+<div class="nb-cell program" name="p8">
+parent(raf,toon).
+
+offspring(Child,Parent) :- parent(Parent, Child).
+</div>
+
+<div class="nb-cell markdown" name="md11">
+## Querying rules
+
+See scan procedure (Bratko, p. 42): ?- offspring(liz,tom).
+</div>
+
+<div class="nb-cell markdown" name="md12">
+## 1.3 Recursive rules
+
+### Predecessor relation
+
+How to express the predecessor information?
+</div>
+
+<div class="nb-cell program" name="p9">
+% predecessor chain
+</div>
+
+<div class="nb-cell program" name="p10">
+% alternative
+
+
+% ? predecessor(tom,pat).
+% ? predecessor(pam,X).
+</div>
+
+<div class="nb-cell markdown" name="md13">
+Prolog query: succeeds/fails? 
+
+Execution tree, execution trace, Prolog trace
+</div>
+
+<div class="nb-cell markdown" name="md14">
+### Prolog progams and queries
+
+A Prolog program consists of a set of predicates.
+
+A Prolog predicate =|p/n|= is defined by its set of rules (aka clauses) for p/n.
+
+Declarative reading: in terms of objects (individuals) and relations;
+
+	clauses are expressing our knowledge; 
+	reason about correctness and completeness of clauses (semantics  of logic programming); 
+	logical consequences;
+
+
+Procedural reading: 
+
+	how are the queries and clauses actually evaluated by the Prolog system;
+    the execution procedure
+
+In principle, programmer should be concerned with declarative meaning; execution details should mainly be left to Prolog.
+BUT ...
+</div>
+
+</div>
