@@ -24,8 +24,9 @@ from __future__ import print_function
 import shop
 
 
-def argmin(a):
-    return min(range(len(a)), key=lambda x : a[x])
+def argmin(aList):
+    """Auxiliary function which acts like np.argmin: returns index of lowest value of a list"""
+    return min(range(len(aList)), key=lambda x: aList[x])
 
 def shopSmart(orderList, fruitShops):
     """
