@@ -37,7 +37,7 @@ def buyLotsOfFruit(orderList):
     totalCost = 0.0
     for (fruit, numPounds) in orderList:
         if fruit not in fruitPrices.keys():
-            print("This is an error message")
+            print("ERROR - I've never seen this fruit before in my entire life, get out NOW.")
             return None
         else:
             totalCost += numPounds * fruitPrices[fruit]
