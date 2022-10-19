@@ -289,9 +289,10 @@ class CornersProblem(search.SearchProblem):
             if not startingGameState.hasFood(*corner):
                 print('Warning: no food in corner ' + str(corner))
         self._expanded = 0 # DO NOT CHANGE; Number of search nodes expanded
-        # Please add any code here which you would like to use
-        # in initializing the problem
+
         "*** YOUR CODE HERE ***"
+        # 4 goal states: visited all corners and at the end we are at a corner
+        self.goalStates = [(corner, [1, 1, 1, 1]) for corner in self.corners]
 
     def getStartState(self):
         """
@@ -299,14 +300,16 @@ class CornersProblem(search.SearchProblem):
         space)
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        ### TO DO: this won't work if we START in a corner???
+        return (self.startingPosition, [0, 0, 0, 0])
 
     def isGoalState(self, state: Any):
         """
         Returns whether this search state is a goal state of the problem.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        return state in self.goalStates
 
     def getSuccessors(self, state: Any):
         """
@@ -319,16 +322,35 @@ class CornersProblem(search.SearchProblem):
             is the incremental cost of expanding to that successor
         """
 
+        (position, cornerHistory) = state
+
+        ### TO DO: won't this fail - due to copy etc?
+        ###nextCornerHistory = cornerHistory
+        ### temporary "fix": make a copy myself
+        nextCornerHistory = []
+        for value in cornerHistory:
+            nextCornerHistory.append(value)
+
+        # Build the successors
         successors = []
         for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
-            # Add a successor state to the successor list if the action is legal
-            # Here's a code snippet for figuring out whether a new position hits a wall:
-            #   x,y = currentPosition
-            #   dx, dy = Actions.directionToVector(action)
-            #   nextx, nexty = int(x + dx), int(y + dy)
-            #   hitsWall = self.walls[nextx][nexty]
+            x,y = position
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            if not self.walls[nextx][nexty]:
+                nextPosition = (nextx, nexty)
+                cost = self.costFn(nextPosition)
+                # Check if the next position is a corner
+                if nextPosition in self.corners:
+                    # In that case, get index of that corner...
+                    index = self.corners.index(nextPosition)
+                    # ... and change boolean value in cornerHistory
+                    nextCornerHistory[index] = 1
+                # Build the next state:
+                nextState = (nextPosition, next)
 
-            "*** YOUR CODE HERE ***"
+                successors.append( ( nextState, action, cost) )
+
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
