@@ -270,6 +270,18 @@ def euclideanHeuristic(position, problem, info={}):
 # This portion is incomplete.  Time to write code!  #
 #####################################################
 
+def euclideanDistance(position1, position2, info={}):
+    "The Euclidean distance heuristic for a PositionSearchProblem"
+    xy1 = position1
+    xy2 = position2
+    return ( (xy1[0] - xy2[0]) ** 2 + (xy1[1] - xy2[1]) ** 2 ) ** 0.5
+
+def manhattanDistance(position1, position2):
+    "The Manhattan distance heuristic for a PositionSearchProblem"
+    xy1 = position1
+    xy2 = position2
+    return abs(xy1[0] - xy2[0]) + abs(xy1[1] - xy2[1])
+
 class CornersProblem(search.SearchProblem):
     """
     This search problem finds paths through all four corners of a layout.
@@ -277,7 +289,7 @@ class CornersProblem(search.SearchProblem):
     You must select a suitable state space and successor function
     """
 
-    def __init__(self, startingGameState: pacman.GameState):
+    def __init__(self, startingGameState: pacman.GameState, costFn = lambda x: 1):
         """
         Stores the walls, pacman's starting position and corners.
         """
@@ -292,7 +304,8 @@ class CornersProblem(search.SearchProblem):
 
         "*** YOUR CODE HERE ***"
         # 4 goal states: visited all corners and at the end we are at a corner
-        self.goalStates = [(corner, [1, 1, 1, 1]) for corner in self.corners]
+        self.goalStates = [(corner, (1, 1, 1, 1)) for corner in self.corners]
+        self.costFn = costFn
 
     def getStartState(self):
         """
@@ -301,7 +314,7 @@ class CornersProblem(search.SearchProblem):
         """
         "*** YOUR CODE HERE ***"
         ### TO DO: this won't work if we START in a corner???
-        return (self.startingPosition, [0, 0, 0, 0])
+        return self.startingPosition, (0, 0, 0, 0)
 
     def isGoalState(self, state: Any):
         """
@@ -324,16 +337,10 @@ class CornersProblem(search.SearchProblem):
 
         (position, cornerHistory) = state
 
-        ### TO DO: won't this fail - due to copy etc?
-        ###nextCornerHistory = cornerHistory
-        ### temporary "fix": make a copy myself
-        nextCornerHistory = []
-        for value in cornerHistory:
-            nextCornerHistory.append(value)
-
         # Build the successors
         successors = []
         for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
+            nextCornerHistory = cornerHistory
             x,y = position
             dx, dy = Actions.directionToVector(action)
             nextx, nexty = int(x + dx), int(y + dy)
@@ -345,12 +352,14 @@ class CornersProblem(search.SearchProblem):
                     # In that case, get index of that corner...
                     index = self.corners.index(nextPosition)
                     # ... and change boolean value in cornerHistory
-                    nextCornerHistory[index] = 1
+                    ### TO DO: improve this cumbersome code?
+                    nextCornerHistoryAsList = list(cornerHistory)
+                    nextCornerHistoryAsList[index] = 1
+                    nextCornerHistory = tuple(nextCornerHistoryAsList)
+
                 # Build the next state:
-                nextState = (nextPosition, next)
-
+                nextState = (nextPosition, nextCornerHistory)
                 successors.append( ( nextState, action, cost) )
-
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
@@ -381,12 +390,39 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     This function should always return a number that is a lower bound on the
     shortest path from the state to a goal of the problem; i.e.  it should be
     admissible (as well as consistent).
+    TW: the heuristic is the sum of all Manhattan distances to reach the 4 corners
     """
-    corners = problem.corners # These are the corner coordinates
+    corners = list(problem.corners) # These are the corner coordinates
     walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
 
     "*** YOUR CODE HERE ***"
-    return 0 # Default to trivial solution
+    heuristic = 0
+
+    # Get the current state: position and which corners were already reached
+    current_position = state[0]
+    reached_corners = state[1]
+
+    # Get the corners that we still have to reach, starting from this state
+    corners_to_reach = []
+    for (i, corner) in enumerate(corners):
+        if reached_corners[i] == 0:
+            corners_to_reach.append(corner)
+
+    while len(corners_to_reach) != 0:
+        # Compute, from this position, the Manhattan distance to all corners
+        current_distances = [manhattanDistance(current_position, corner) for corner in corners_to_reach]
+
+        # From these distances, take the closest corner
+        best_distance = min(current_distances)
+        best_index = current_distances.index(best_distance)
+        best_corner = corners_to_reach[best_index]
+        heuristic += best_distance
+
+        # Update your position, and remove the corner
+        current_position = best_corner
+        corners_to_reach.remove(best_corner)
+
+    return heuristic
 
 class AStarCornersAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"
