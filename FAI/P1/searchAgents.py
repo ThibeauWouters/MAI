@@ -516,7 +516,70 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+    heuristic = 0
+    remaining_dots = foodGrid.asList()
+
+    # If at a goal state:
+    if len(remaining_dots) == 0:
+        return 0
+
+    # Return largest distance between Pacman and all remaining dots. Take walls into account
+    # TODO: optimize this, as it is quite slow due to calls to BFS algorithm
+    else:
+        current_distances = [mazeDistance(position, dot, problem.startingGameState) for dot in remaining_dots]
+        return max(current_distances)
+
+    ## OPTION 2: still work in progress
+    # # One dot left:  simply return real distance
+    # elif len(remaining_dots) == 1:
+    #     return mazeDistance(position, remaining_dots[0], problem.startingGameState)
+    #
+    # # Two or more dots left: complicated situation
+    # else:
+    #     # Get all distances from Pacman to all dots
+    #     current_distances = [mazeDistance(position, dot, problem.startingGameState) for dot in remaining_dots]
+    #
+    #     # Get two largest and save them
+    #     first_largest_distance = max(current_distances)
+    #     first_largest_index = current_distances.index(first_largest_distance)
+    #     first_largest_location = remaining_dots[first_largest_index]
+    #     # Save this, and remove from possibilities
+    #     current_distances.remove(first_largest_distance)
+    #     remaining_dots.remove(first_largest_location)
+    #
+    #     second_largest_distance = max(current_distances)
+    #     second_largest_index = current_distances.index(second_largest_distance)
+    #     second_largest_location = remaining_dots[second_largest_index]
+    #
+    #     # Get the distance between the furthest fruits
+    #     inter_fruit_distance = mazeDistance(first_largest_location, second_largest_location, problem.startingGameState)
+    #
+    #     # Get distance from Pacman to closest of the two furthest
+    #     pacman_distance = min([first_largest_distance, second_largest_distance])
+    #     # Sum to get total heuristic value
+    #     #heuristic = inter_fruit_distance + pacman_distance
+    #     heuristic = pacman_distance
+    #
+    #     return heuristic
+
+    ### OPTION 3: sum all manhattan distances --- is not admissable???
+    # while len(remaining_dots) != 0:
+    #     # Get distances to all the dots, ignoring the walls for now
+    #     current_distances = [manhattanDistance(position, dot_position) for dot_position in remaining_dots]
+    #
+    #     # Get closest one
+    #     closest_distance = min(current_distances)
+    #     # Save its location
+    #     closest_dot_index = current_distances.index(closest_distance)
+    #     next_dot_position = remaining_dots[closest_dot_index]
+    #
+    #     # Add value to heuristic
+    #     heuristic += closest_distance
+    #
+    #     # Update pacman position, and "eat" that dot. Repeat the process
+    #     position = next_dot_position
+    #     remaining_dots.remove(next_dot_position)
+
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
@@ -547,7 +610,11 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # BFS will by default give the optimal solution, i.e.: first food that Pacman reached
+        solution = search.bfs(problem)
+        return solution
+
+
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -583,7 +650,8 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Goal state: we reached ANY food location
+        return (x, y) in self.food.asList()
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """

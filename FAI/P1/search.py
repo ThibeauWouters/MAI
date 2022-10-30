@@ -149,8 +149,6 @@ def depthFirstSearch(problem: SearchProblem):
     # Initialize the 'reached' set
     reached = set()
 
-    print("Set up done. Frontier is now", frontier.list)
-
     while not frontier.isEmpty():
         # Pop next node
         node = frontier.pop()
@@ -193,8 +191,6 @@ def breadthFirstSearch(problem: SearchProblem):
     # Initialize the 'reached' set
     reached = set()
 
-    print("Set up done. Frontier is now", frontier.list)
-
     while not frontier.isEmpty():
         # Pop next node
         node = frontier.pop()
@@ -234,8 +230,6 @@ def uniformCostSearch(problem: SearchProblem):
 
     # Initialize the 'reached' set
     reached = set()
-
-    #print("Set up done. Frontier is now", frontier.list)
 
     while not frontier.isEmpty():
         # Pop next node, save its priority
@@ -283,8 +277,6 @@ def aStarSearch(problem: SearchProblem, heuristic=nullHeuristic):
 
     # Initialize the 'reached' set
     reached = set()
-
-    #print("Set up done. Frontier is now", frontier.list)
 
     while not frontier.isEmpty():
         # Pop next node, save its priority
