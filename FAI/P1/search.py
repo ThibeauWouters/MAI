@@ -72,32 +72,46 @@ def tinyMazeSearch(problem):
     w = Directions.WEST
     return  [s, s, w, s, w, w, s, w]
 
-def expand(problem: SearchProblem, node, final_state, frontier):
-    """Given a search problem, a node and its final state (and frontier), expand the children and add to the frontier."""
 
+def expand(problem: SearchProblem, node, final_state, frontier):
+    """OWN CODE. Given a search problem, a node and its final state (and frontier),
+        expand the children and add to the frontier. Does not work properly with priority queues: see
+        the expandQueue function (see below) as a separate fix for this."""
+
+    # Get the successors
     successors = problem.getSuccessors(final_state)
+
+    # Store each successor in the frontier
     for i in range(len(successors)):
         new_node = node + [successors[i]]
         frontier.push(new_node)
 
-    return frontier ### to do: necessary???
+    return frontier
+
 
 def computeTotalCost(node):
+    """OWN COE. Compute the total cost of a whole node"""
     sum = 0
 
+    # Iterate over all the states inside this node
     for state in node[1:]:
+        # The cost is saved at index 2 of a 'node'
         sum += state[2]
 
     return sum
 
-def expandQueue(problem: SearchProblem, node, final_state, frontier, heuristic = None):
-    """Given a search problem, a node and its final state (and frontier), expand the children and add to the frontier.
-        Slight variation due to PriorityQueue requiring to save the priority (total cost of a path).
-        Heuristic is a heuristic function, like Manhattan distance: see searchAgents.py"""
 
+def expandQueue(problem: SearchProblem, node, final_state, frontier, heuristic=None):
+    """OWN CODE. Given a search problem, a node and its final state (and frontier), expand children and add to frontier.
+        Slight variation of expand function, due to PriorityQueue requiring to save the priority (total cost of a path).
+        'Heuristic' is a heuristic function, like Manhattan distance: see searchAgents.py"""
+
+    # Get the successors, also save the current priority value
     successors = problem.getSuccessors(final_state)
     current_priority = computeTotalCost(node)
 
+    # For each successor, compute the new priority value before storing.
+    # If heuristic is present, use it as well during computation of priority
     for i in range(len(successors)):
         new_node = node + [successors[i]]
         new_priority = current_priority + successors[i][2]
@@ -106,21 +120,25 @@ def expandQueue(problem: SearchProblem, node, final_state, frontier, heuristic =
             heuristic_value = heuristic(successors[i][0], problem)
             new_priority += heuristic_value
 
+        # Save this successor into frontier
         frontier.push(new_node, new_priority)
 
+    return frontier
 
-
-    return frontier ### to do: necessary???
 
 def compileActions(goal_node):
-    """When we found a solution, in the goal node, compile the necessary actions to let Pacman win the game
-        Should be called right before returning in the search algorithms"""
+    """OWN CODE. When we found a solution, in the goal node, compile the necessary actions to let Pacman win the game
+        Should be called right before return statements of the search algorithms."""
+    # Initialize empty list, to be filled with actions leading to goal
     actions = []
 
+    # Note: we discard the start state, which has no action, using the list slice operator
     for state in goal_node[1:]:
+        # The structure of states is such that actions are at index 1.
         actions.append(state[1])
 
     return actions
+
 
 def depthFirstSearch(problem: SearchProblem):
     """
@@ -138,31 +156,33 @@ def depthFirstSearch(problem: SearchProblem):
     """
     "*** YOUR CODE HERE ***"
 
-    # Create empty frontier
+    # Create empty frontier - choose for a stack
     frontier = util.Stack()
 
-    # Add start node to the frontier
+    # Add starting node to the frontier
     start_state = problem.getStartState()
     start_node = [start_state]
     frontier.push(start_node)
 
-    # Initialize the 'reached' set
+    # Initialize an empty 'reached' set
     reached = set()
 
+    # The main search loop is written here:
     while not frontier.isEmpty():
         # Pop next node
         node = frontier.pop()
 
-        # Get the final state of this node. Watch out: start node is NOT a triplet, separate case
+        # Get the final state of the current node.
+        # Watch out: start node is NOT a triplet: separate case to be handled
         if node == start_node:
             final_state = start_state
         else:
+            # All other nodes are a triplet, the state (position,...) is at index 0
             final_state = node[-1][0]
 
         # Check if the final state is a goal state
         if problem.isGoalState(final_state):
-            ## Test:
-            #print("Solution found, winning node: ", node)
+            # If goal is reached, return the set of actions (see above for auxiliary function)
             actions = compileActions(node)
             return actions
 
@@ -171,16 +191,16 @@ def depthFirstSearch(problem: SearchProblem):
             expand(problem, node, final_state, frontier)
             reached.add(final_state)
 
+    # In case an unforeseen error happened, print a statement to the console to flag it.
     print("No solution was found. Something is wrong?")
     return False
-
 
 
 def breadthFirstSearch(problem: SearchProblem):
     """Search the shallowest nodes in the search tree first."""
     "*** YOUR CODE HERE ***"
 
-    # Create empty frontier
+    # Create empty frontier - use a regular queue
     frontier = util.Queue()
 
     # Add start node to the frontier
@@ -203,8 +223,7 @@ def breadthFirstSearch(problem: SearchProblem):
 
         # Check if the final state is a goal state
         if problem.isGoalState(final_state):
-            ## Test:
-            #print("Solution found, winning node: ", node)
+            # Compile actions (see above)
             actions = compileActions(node)
             return actions
 
@@ -213,14 +232,16 @@ def breadthFirstSearch(problem: SearchProblem):
             expand(problem, node, final_state, frontier)
             reached.add(final_state)
 
+    # Testing purpose: flag if something unforeseen happened
     print("No solution was found. Something is wrong?")
     return False
+
 
 def uniformCostSearch(problem: SearchProblem):
     """Search the node of least total cost first."""
     "*** YOUR CODE HERE ***"
 
-    # Create empty frontier
+    # Create empty frontier - use a priority queue
     frontier = util.PriorityQueue()
 
     # Add start node to the frontier
@@ -243,18 +264,19 @@ def uniformCostSearch(problem: SearchProblem):
 
         # Check if the final state is a goal state
         if problem.isGoalState(final_state):
-            ### Testing purpose: print the solution when found
-            #print("Solution found, winning node: ", node)
             actions = compileActions(node)
             return actions
 
         # Expand children of the node and add final state to reached set
         if final_state not in reached:
+            # Note: 'expandQueue' used here, not 'expand'! See above
             expandQueue(problem, node, final_state, frontier)
             reached.add(final_state)
 
+    # Testing: print if something unforeseen happened
     print("No solution was found. Something is wrong?")
     return False
+
 
 def nullHeuristic(state, problem=None):
     """
@@ -263,11 +285,12 @@ def nullHeuristic(state, problem=None):
     """
     return 0
 
+
 def aStarSearch(problem: SearchProblem, heuristic=nullHeuristic):
     """Search the node that has the lowest combined cost and heuristic first."""
     "*** YOUR CODE HERE ***"
 
-    # Create empty frontier
+    # Create empty frontier - use a priority queue
     frontier = util.PriorityQueue()
 
     # Add start node to the frontier
@@ -290,16 +313,16 @@ def aStarSearch(problem: SearchProblem, heuristic=nullHeuristic):
 
         # Check if the final state is a goal state
         if problem.isGoalState(final_state):
-            ## Test:
-            #print("Solution found, winning node: ", node)
             actions = compileActions(node)
             return actions
 
         # Expand children of the node and add final state to reached set
         if final_state not in reached:
+            # Again, use expandQueue, as we are using a priority queue
             expandQueue(problem, node, final_state, frontier, heuristic)
             reached.add(final_state)
 
+    # Testing: print if something unforeseen happened
     print("No solution was found. Something is wrong?")
     util.raiseNotDefined()
 
