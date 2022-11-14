@@ -43,10 +43,13 @@ class ReflexAgent(Agent):
         legalMoves = gameState.getLegalActions()
 
         # Choose one of the best actions
+        # print("Checking actions . . . ")
         scores = [self.evaluationFunction(gameState, action) for action in legalMoves]
         bestScore = max(scores)
         bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
-        chosenIndex = random.choice(bestIndices) # Pick randomly among the best
+        # Pick randomly among the best
+        chosenIndex = random.choice(bestIndices)
+        # print("Action chosen!")
 
         "Add more of your code here if you want to"
 
@@ -67,15 +70,61 @@ class ReflexAgent(Agent):
         Print out these variables to see what you're getting, then combine them
         to create a masterful evaluation function.
         """
-        # Useful information you can extract from a GameState (pacman.py)
+        # Useful information previous state
+        previousGameScore = currentGameState.getScore()
+        previousPos = currentGameState.getPacmanPosition()
+
+        # Information about new state
         successorGameState = currentGameState.generatePacmanSuccessor(action)
+        successorGameScore = successorGameState.getScore()
+
         newPos = successorGameState.getPacmanPosition()
         newFood = successorGameState.getFood()
+        newFoodPositions = newFood.asList()
         newGhostStates = successorGameState.getGhostStates()
+        newGhostPositions = successorGameState.getGhostPositions()
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
         "*** YOUR CODE HERE ***"
-        return successorGameState.getScore()
+        # If no food left: we win!!!
+        if len(newFoodPositions) == 0:
+            return 1000
+
+        # Get approximate distance to food and ghosts
+        food_distances = [manhattanDistance(newPos, foodPos) for foodPos in newFoodPositions]
+        ghost_distances = [manhattanDistance(newPos, ghostPos) for ghostPos in newGhostPositions]
+
+
+        # Base score: how the gamescore improves
+        base_score = successorGameScore - previousGameScore
+
+        # Get "best" values:
+        closest_food_distance = min(food_distances)
+        farthest_food_distance = max(food_distances)
+        closest_ghost_distance = min(ghost_distances)
+        total_food_distance = sum(food_distances)
+        if closest_ghost_distance == 0:
+            # Pacman dies
+            return -1000
+
+        # Check if we are in danger, i.e. a ghost closer than manhattan distance 3 and no pellet eaten:
+        danger_perimeter = 3
+        dangerous = False
+        if closest_ghost_distance < danger_perimeter and 0 in newScaredTimes:
+            dangerous = True
+
+        # Make a score:
+        if dangerous:
+            # If we are at risk, play carefully - just get away from ghost
+            score = - 1/closest_ghost_distance
+        else:
+            score = base_score + 1/closest_food_distance + 5*1/farthest_food_distance + 5*1/total_food_distance
+            # Add penalty for standing still (in case we are safe)
+            if newPos == previousPos:
+                score += -1
+
+
+        return score
 
 def scoreEvaluationFunction(currentGameState: GameState):
     """
@@ -112,6 +161,41 @@ class MinimaxAgent(MultiAgentSearchAgent):
     Your minimax agent (question 2)
     """
 
+    def getMinimaxValue(self, gameState, agent_index, current_depth):
+        """Auxiliary function to compute the minimax value."""
+
+        # BASE CASES
+        # If terminal state, return the score
+        if gameState.isWin() or gameState.isLose():
+            return gameState.getScore()
+
+        # If we exceeded max depth, estimate the utility with evaluationfunction
+        elif current_depth == self.depth+1:
+            return self.evaluationFunction(gameState)
+
+        # RECURSIVE CASES
+        # If not deep enough yet, then recursively get minimax values of next player
+        else:
+            new_actions = gameState.getLegalActions(agent_index)
+            successors = [gameState.generateSuccessor(agent_index, action) for action in new_actions]
+
+            next_agent_index = (agent_index + 1) % gameState.getNumAgents()
+            # If again at zero: increase depth by one
+            if next_agent_index == 0:
+                next_depth = current_depth + 1
+            else:
+                next_depth = current_depth
+
+            # Get values of the next one
+            successor_values = []
+            for successor in successors:
+                new_value = self.getMinimaxValue(successor, next_agent_index, next_depth)
+                successor_values.append(new_value)
+            if agent_index == 0:
+                return max(successor_values)
+            else:
+                return min(successor_values)
+
     def getAction(self, gameState: GameState):
         """
         Returns the minimax action from the current gameState using self.depth
@@ -136,7 +220,31 @@ class MinimaxAgent(MultiAgentSearchAgent):
         Returns whether or not the game state is a losing state
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # We will store all minimax values in a list:
+        minimax_values = []
+
+        # Get minimax value for all legal actions in the game
+        legal_actions = gameState.getLegalActions(self.index)
+        for action in legal_actions:
+            successor = gameState.generateSuccessor(self.index, action)
+            next_index = (self.index + 1) % gameState.getNumAgents()
+            minimax_values.append(self.getMinimaxValue(successor, next_index, 1))
+
+        # If we are pacman (index = 0)
+        if self.index == 0:
+            # Do argmax
+            best_minimax_value = max(minimax_values)
+            best_index = minimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+        # If we are a ghost:
+        else:
+            # Do argmin
+            best_minimax_value = min(minimax_values)
+            best_index = minimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+
+        return best_action
 
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
