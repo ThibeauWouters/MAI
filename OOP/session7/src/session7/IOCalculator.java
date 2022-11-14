@@ -13,16 +13,15 @@ public class IOCalculator {
 	public static void main(String[] args) { 
 		double mean = 0, number = 0, sum = 0, count = 0;
 
+		// Ask user input:
 		System.out.println("Enter a file name"); 
 		Scanner scan = new Scanner(System.in);
 		String fileName = scan.next();
-		// Make filename complete with src folder:
 		fileName = "src/" + fileName;
 		System.out.println("Digging into file: " + fileName);
-		// Don't need scanner anymore
 		scan.close(); 
+		
 		// Here is where we read stuff:
-
 		try(Scanner input = new Scanner(new FileReader(fileName));){
 			// Keep going as long as there's input:
 			while(input.hasNext()) {
