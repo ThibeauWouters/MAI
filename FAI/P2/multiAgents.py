@@ -49,7 +49,6 @@ class ReflexAgent(Agent):
         bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
         # Pick randomly among the best
         chosenIndex = random.choice(bestIndices)
-        # print("Action chosen!")
 
         "Add more of your code here if you want to"
 
@@ -93,7 +92,6 @@ class ReflexAgent(Agent):
         # Get approximate distance to food and ghosts
         food_distances = [manhattanDistance(newPos, foodPos) for foodPos in newFoodPositions]
         ghost_distances = [manhattanDistance(newPos, ghostPos) for ghostPos in newGhostPositions]
-
 
         # Base score: how the gamescore improves
         base_score = successorGameScore - previousGameScore
@@ -246,22 +244,217 @@ class MinimaxAgent(MultiAgentSearchAgent):
 
         return best_action
 
+
+
+
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
     Your minimax agent with alpha-beta pruning (question 3)
     """
+
+    def getMaxValue(self, gameState, agent_index, current_depth, alpha, beta):
+        # Initialize v:
+        v = -99999999
+
+        # Get next agent
+        next_agent_index = (agent_index + 1) % gameState.getNumAgents()
+
+        # Update depth if necessary
+        if next_agent_index == 0:
+            next_depth = current_depth + 1
+        else:
+            next_depth = current_depth
+
+        # Look at children, use alpha beta pruning
+        new_actions = gameState.getLegalActions(agent_index)
+        for action in new_actions:
+            # Get child and recursively get its value
+            successor = gameState.generateSuccessor(agent_index, action)
+            new_value = self.getMinimaxValue(successor, next_agent_index, next_depth, alpha, beta)
+            # Update the value for v
+            v = max(v, new_value)
+            # Return (prune) if v is larger than smallest beta value (ghosts)
+            if v > min(beta):
+                break
+            # Update Pacman's alpha value
+            alpha = max(alpha, v)
+        return v
+
+    def getMinValue(self, gameState, agent_index, current_depth, alpha, beta):
+        # Get max value:
+        v = 99999999
+        # Get next agent
+        next_agent_index = (agent_index + 1) % gameState.getNumAgents()
+
+        # Update depth if necessary
+        if next_agent_index == 0:
+            next_depth = current_depth + 1
+        else:
+            next_depth = current_depth
+
+        # Look at children, use alpha beta pruning
+        new_actions = gameState.getLegalActions(agent_index)
+        for action in new_actions:
+            # Get child and recursively determine its value
+            successor = gameState.generateSuccessor(agent_index, action)
+            new_value = self.getMinimaxValue(successor, next_agent_index, next_depth, alpha, beta)
+            # Update v
+            v = min(v, new_value)
+            # Return (prune) if v is smaller than alpha:
+            if v < alpha:
+                break
+            # Update this agent's beta value
+            beta[agent_index - 1] = min(beta[agent_index - 1], v)
+        return v
+
+    def getMinimaxValue(self, gameState, agent_index, current_depth, alpha, beta):
+
+        # BASE CASES
+        # If terminal state, return the score
+        if gameState.isWin() or gameState.isLose():
+            return gameState.getScore()
+
+        # If we exceeded max depth, estimate the utility with evaluationfunction
+        elif current_depth == self.depth+1:
+            return self.evaluationFunction(gameState)
+
+        # RECURSIVE CASES --- now with alpha beta pruning:
+        # If not deep enough yet, then recursively get minimax values of children
+        else:
+            # Note: as we are using a list for the beta values, we have to make a copy, otherwise
+            # we will overwrite the results in each recursive call.
+            beta_copy = beta.copy()
+
+            # In case we are Pacman (max player): call max value function
+            if agent_index == 0:
+                beta_copy = beta.copy()
+                return self.getMaxValue(gameState, agent_index, current_depth, alpha, beta_copy)
+
+            # In case we are NOT pacman (min player): call min value function
+            else:
+
+                return self.getMinValue(gameState, agent_index, current_depth, alpha, beta_copy)
 
     def getAction(self, gameState: GameState):
         """
         Returns the minimax action using self.depth and self.evaluationFunction
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # We will store all minimax values of children of root in a list:
+        minimax_values = []
+        # Get all possible actions, starting at the root
+        legal_actions = gameState.getLegalActions(self.index)
+
+        alpha = -99999999
+        # As there can be more min players, use a list. Number of min players is number of agents - 1
+        beta = [99999999] * (gameState.getNumAgents() - 1)
+
+        # Note: for first player, need to explore all children, can only prune in the children
+        next_index = (self.index + 1) % gameState.getNumAgents()
+        for action in legal_actions:
+            # Get child and compute its minimax value
+            successor = gameState.generateSuccessor(self.index, action)
+            new_value = self.getMinimaxValue(successor, next_index, 1, alpha, beta.copy())
+            minimax_values.append(new_value)
+            # As in the minimax function itself, update the alpha/beta passed onto the next branch
+            if self.index == 0:
+                alpha = max(alpha, new_value)
+            else:
+                beta[self.index - 1] = min(beta[self.index - 1], new_value)
+
+        # From computed minimax values, get the best action
+        # If we are pacman (index = 0)
+        if self.index == 0:
+            # Do argmax
+            best_minimax_value = max(minimax_values)
+            best_index = minimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+        # If we are a ghost:
+        else:
+            # Do argmin
+            best_minimax_value = min(minimax_values)
+            best_index = minimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+
+        return best_action
+
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
     """
       Your expectimax agent (question 4)
     """
+
+
+    def getMaxValue(self, gameState, agent_index, current_depth):
+        # Initialize v:
+        v = -99999999
+
+        # Get next agent
+        next_agent_index = (agent_index + 1) % gameState.getNumAgents()
+
+        # Update depth if necessary
+        if next_agent_index == 0:
+            next_depth = current_depth + 1
+        else:
+            next_depth = current_depth
+
+        # Look at children, use alpha beta pruning
+        new_actions = gameState.getLegalActions(agent_index)
+        for action in new_actions:
+            # Get child and recursively get its value
+            successor = gameState.generateSuccessor(agent_index, action)
+            new_value = self.getExpectimaxValue(successor, next_agent_index, next_depth)
+            # Update the value for v
+            v = max(v, new_value)
+        return v
+
+    def getExpValue(self, gameState, agent_index, current_depth):
+        # Initialize v
+        v = 0
+        # Get next agent
+        next_agent_index = (agent_index + 1) % gameState.getNumAgents()
+
+        # Update depth if necessary
+        if next_agent_index == 0:
+            next_depth = current_depth + 1
+        else:
+            next_depth = current_depth
+
+        # Look at children, use alpha beta pruning
+        new_actions = gameState.getLegalActions(agent_index)
+        p = 1/len(new_actions)
+
+        for action in new_actions:
+            # Get child and recursively determine its value
+            successor = gameState.generateSuccessor(agent_index, action)
+            new_value = self.getExpectimaxValue(successor, next_agent_index, next_depth)
+            # Update v
+            v += p*new_value
+        return v
+
+    def getExpectimaxValue(self, gameState, agent_index, current_depth):
+
+        # BASE CASES
+        # If terminal state, return the score
+        if gameState.isWin() or gameState.isLose():
+            return gameState.getScore()
+
+        # If we exceeded max depth, estimate the utility with evaluationfunction
+        elif current_depth == self.depth+1:
+            return self.evaluationFunction(gameState)
+
+        # RECURSIVE CASES --- now with alpha beta pruning:
+        # If not deep enough yet, then recursively get minimax values of children
+        else:
+
+            # In case we are Pacman (max player): call max value function
+            if agent_index == 0:
+                return self.getMaxValue(gameState, agent_index, current_depth)
+
+            # In case we are NOT pacman (min player): call min value function
+            else:
+                return self.getExpValue(gameState, agent_index, current_depth)
 
     def getAction(self, gameState: GameState):
         """
@@ -271,7 +464,36 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         legal moves.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # We will store all minimax values of children of root in a list:
+        expectimax_values = []
+        # Get all possible actions, starting at the root
+        legal_actions = gameState.getLegalActions(self.index)
+
+        # Note: for first player, need to explore all children, can only prune in the children
+        next_index = (self.index + 1) % gameState.getNumAgents()
+        for action in legal_actions:
+            # Get child and compute its minimax value
+            successor = gameState.generateSuccessor(self.index, action)
+            new_value = self.getExpectimaxValue(successor, next_index, 1)
+            expectimax_values.append(new_value)
+
+        # From computed minimax values, get the best action
+        # If we are pacman (index = 0)
+        if self.index == 0:
+            # Do argmax
+            best_minimax_value = max(expectimax_values)
+            best_index = expectimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+        # If we are a ghost:
+        else:
+            # Do argmin
+            best_minimax_value = min(expectimax_values)
+            best_index = expectimax_values.index(best_minimax_value)
+            best_action = legal_actions[best_index]
+
+        return best_action
+
 
 def betterEvaluationFunction(currentGameState: GameState):
     """
