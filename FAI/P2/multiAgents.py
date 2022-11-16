@@ -503,7 +503,74 @@ def betterEvaluationFunction(currentGameState: GameState):
     DESCRIPTION: <write something here so we know what you did>
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+
+    # Get information for current
+    # capsulePositions = currentGameState.getCapsules()
+    # numberOfCapsules = len(capsulePositions)
+    pos = currentGameState.getPacmanPosition()
+    food = currentGameState.getFood()
+    foodPositions = food.asList()
+    numberOfFood = len(foodPositions)
+    ghostStates = currentGameState.getGhostStates()
+    ghostPositions = currentGameState.getGhostPositions()
+    numberOfGhosts = len(ghostPositions)
+    scaredTimes = [ghostState.scaredTimer for ghostState in ghostStates]
+
+    "*** YOUR CODE HERE ***"
+    # If no food left: we win!!!
+    if len(foodPositions) == 0:
+        return 999999999999
+
+    # Base score: how the gamescore improves
+    base_score = currentGameState.getScore()
+
+    # Get approximate distance to food and ghosts
+    food_distances = [manhattanDistance(pos, foodPos) for foodPos in foodPositions]
+    ghost_distances = [manhattanDistance(pos, ghostPos) for ghostPos in ghostPositions]
+    # capsule_distances = [manhattanDistance(pos, capsulePos) for capsulePos in capsulePositions]
+
+    # Get extreme values:
+    # for food:
+    closest_food_distance = min(food_distances)
+    farthest_food_distance = max(food_distances)
+    total_food_distance = sum(food_distances)
+
+    # # for capsules:
+    # if numberOfCapsules != 0:
+    #     consider_capsules = True
+    #     closest_capsule_distance = min(capsule_distances)
+    #     farthest_capsule_distance = max(capsule_distances)
+    #     total_capsule_distance = sum(capsule_distances)
+    # else:
+    #     consider_capsules = False
+
+    # for ghosts:
+    closest_ghost_distance = min(ghost_distances)
+
+    # For ghosts, also check if they are scared:
+    scared_value = min(scaredTimes)
+
+    if closest_ghost_distance == 0:
+        # Pacman dies
+        return -999999999999999
+
+    # Check if we are in danger, i.e. a ghost closer than manhattan distance 3 and no pellet eaten:
+    danger_perimeter = 5
+    if closest_ghost_distance < danger_perimeter and 0 in scaredTimes:
+        # dangerous = True
+        ghost_sign = -1
+    else:
+        # dangerous = False
+        ghost_sign = +1
+
+    score = base_score + 1 / closest_food_distance
+    + 1 / total_food_distance - 1 / closest_ghost_distance
+
+    # score = base_score + 1 / closest_food_distance
+    # + 1 / total_food_distance + ghost_sign *100 / closest_ghost_distance + 100 / numberOfFood + 1000 * scared_value
+
+    return score
+
 
 # Abbreviation
 better = betterEvaluationFunction
