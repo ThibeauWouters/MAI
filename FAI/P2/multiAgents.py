@@ -569,8 +569,6 @@ def betterEvaluationFunction(currentGameState: GameState):
     # score = base_score + 1 / closest_food_distance
     # + 1 / total_food_distance + ghost_sign *100 / closest_ghost_distance + 100 / numberOfFood + 1000 * scared_value
 
-    return score
-
 
 # Abbreviation
 better = betterEvaluationFunction
