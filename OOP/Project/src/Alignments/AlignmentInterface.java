@@ -8,6 +8,16 @@ import java.util.*;
  *
  */
 public interface AlignmentInterface {
+	
+	public String getGenome(String identifier);
+	/*
+	 * Simple function that returns the genome when given the identifier
+	 */
+	
+	public String getIdentifier(String sequence);
+	/*
+	 * Simple function that returns the genome when given the identifier
+	 */
 
 	public ArrayList<String> searchGenomes(String subString);
 	/* 
@@ -22,23 +32,41 @@ public interface AlignmentInterface {
 	 * the initial FASTA file)
 	 */
 	
-//	public void replaceSequenceAlignment();
-//	/*
-//	 * Same as above, but do this for all genomes in the alignment
-//	 */
-//	
-//	public void addGenome();
-//	/*
-//	 * Add a genome with its corresponding name / identifier
-//	 */
-//	
-//	public void removeGenome();
-//	/*
-//	 * Remove a genome, based on its name / identifier
-//	 */
-//	
-//	// ... other functions? 
-//	// Ideas: give all identifiers, check if identifier is present, give the length of the alignment,...
-//	// get sequence (given identifier), get identifier given sequence.
+	public void replaceSequenceGenome(String identifier, String oldSequence, String newSequence);
+	/*
+	 * in a given genome, replace all occurrences of a given sequence of characters by a new
+	 * sequence of characters (without changing the total length of the genome)
+	 */
+	
+	public void replaceSequenceAlignment(String oldSequence, String newSequence);
+	/*
+	 * Same as above, but do this for all genomes in the alignment
+	 */
+	
+	public void addGenome(String identifier, String sequence);
+	/*
+	 * Add a genome with its corresponding name / identifier
+	 */
 
+	public void removeGenome(String identifier);
+	/*
+	 * Remove a genome, based on its name / identifier
+	 */
+	
+	/* Other functionalities: */
+	
+	public int getLengthAlignment();
+	/*
+	 * Get the length (number of entries in the alignment)
+	 */
+	
+	public ArrayList<String> getIdentifiers();
+	/*
+	 * Get all the identifiers in an ArrayList
+	 */
+	
+	public ArrayList<String> getSequences();
+	/*
+	 * Get all the sequences in an ArrayList
+	 */
 }
