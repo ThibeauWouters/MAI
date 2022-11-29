@@ -14,5 +14,5 @@ scoreThresholds: "500 1000"
 winsMinimum: "1"
 winsThresholds: "1 5 10"
 
-randomSeed: "0"
+randomSeed: "20"
 ghosts: "[RandomGhost(1)]"

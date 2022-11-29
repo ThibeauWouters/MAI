@@ -85,25 +85,25 @@ class ReflexAgent(Agent):
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
         "*** YOUR CODE HERE ***"
-        # If no food left: we win!!!
+        # If no food left: we win!!! Return high value
         if len(newFoodPositions) == 0:
             return 1000
 
-        # Get approximate distance to food and ghosts
+        # Get approximate distance (using Manhattan distance) to food and ghosts
         food_distances = [manhattanDistance(newPos, foodPos) for foodPos in newFoodPositions]
         ghost_distances = [manhattanDistance(newPos, ghostPos) for ghostPos in newGhostPositions]
 
-        # Base score: how the gamescore improves
-        base_score = successorGameScore - previousGameScore
-
-        # Get "best" values:
+        # Get some values related to ghosts and food:
         closest_food_distance = min(food_distances)
         farthest_food_distance = max(food_distances)
         closest_ghost_distance = min(ghost_distances)
         total_food_distance = sum(food_distances)
         if closest_ghost_distance == 0:
-            # Pacman dies
+            # Pacman dies, return very low value
             return -1000
+
+        # Get difference in "base score": how the gamescore improves
+        base_score = successorGameScore - previousGameScore
 
         # Check if we are in danger, i.e. a ghost closer than manhattan distance 3 and no pellet eaten:
         danger_perimeter = 3
@@ -116,13 +116,15 @@ class ReflexAgent(Agent):
             # If we are at risk, play carefully - just get away from ghost
             score = - 1/closest_ghost_distance
         else:
+            # If no risk, try to improve by (1) reducing distance to closest food dot (2) distance to farthest
+            # food dot, and (3) the total distance to all the food dots. Weights are optimized via trial and error.
             score = base_score + 1/closest_food_distance + 5*1/farthest_food_distance + 5*1/total_food_distance
-            # Add penalty for standing still (in case we are safe)
+            # Add a penalty for just standing still (in case we are safe) to motivate Pacman to move around.
             if newPos == previousPos:
                 score += -1
 
-
         return score
+
 
 def scoreEvaluationFunction(currentGameState: GameState):
     """
@@ -133,6 +135,7 @@ def scoreEvaluationFunction(currentGameState: GameState):
     (not reflex agents).
     """
     return currentGameState.getScore()
+
 
 class MultiAgentSearchAgent(Agent):
     """
@@ -154,41 +157,48 @@ class MultiAgentSearchAgent(Agent):
         self.evaluationFunction = util.lookup(evalFn, globals())
         self.depth = int(depth)
 
+
 class MinimaxAgent(MultiAgentSearchAgent):
     """
     Your minimax agent (question 2)
     """
 
+
     def getMinimaxValue(self, gameState, agent_index, current_depth):
         """Auxiliary function to compute the minimax value."""
 
-        # BASE CASES
-        # If terminal state, return the score
+        # --- BASE CASES
+        # If we are at a terminal state, simply return the score
         if gameState.isWin() or gameState.isLose():
             return gameState.getScore()
 
-        # If we exceeded max depth, estimate the utility with evaluationfunction
+        # If we exceeded the max depth specified, estimate the utility with an evaluation function
         elif current_depth == self.depth+1:
             return self.evaluationFunction(gameState)
 
-        # RECURSIVE CASES
-        # If not deep enough yet, then recursively get minimax values of next player
+        # --- RECURSIVE CASES
+        # If search is not deep enough yet, then recursively get minimax values of next player
         else:
+            # Get all the successors of this state
             new_actions = gameState.getLegalActions(agent_index)
             successors = [gameState.generateSuccessor(agent_index, action) for action in new_actions]
 
+            # Specify which agent's turn it is next
             next_agent_index = (agent_index + 1) % gameState.getNumAgents()
-            # If again at zero: increase depth by one
+
+            # If we are again at index 0, we have to increase the depth by one
             if next_agent_index == 0:
                 next_depth = current_depth + 1
             else:
                 next_depth = current_depth
 
-            # Get values of the next one
+            # Get values of the successors
             successor_values = []
             for successor in successors:
                 new_value = self.getMinimaxValue(successor, next_agent_index, next_depth)
                 successor_values.append(new_value)
+
+            # Return the value. For the MAX player, return max, else return min.
             if agent_index == 0:
                 return max(successor_values)
             else:
@@ -222,7 +232,7 @@ class MinimaxAgent(MultiAgentSearchAgent):
         # We will store all minimax values in a list:
         minimax_values = []
 
-        # Get minimax value for all legal actions in the game
+        # Get the minimax value for all actions
         legal_actions = gameState.getLegalActions(self.index)
         for action in legal_actions:
             successor = gameState.generateSuccessor(self.index, action)
@@ -245,21 +255,21 @@ class MinimaxAgent(MultiAgentSearchAgent):
         return best_action
 
 
-
-
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
     Your minimax agent with alpha-beta pruning (question 3)
     """
 
     def getMaxValue(self, gameState, agent_index, current_depth, alpha, beta):
+        """Auxiliary function. Returns the max value of the tree."""
+
         # Initialize v:
         v = -99999999
 
-        # Get next agent
+        # Get the next agent
         next_agent_index = (agent_index + 1) % gameState.getNumAgents()
 
-        # Update depth if necessary
+        # Update depth if necessary (just as for minimax)
         if next_agent_index == 0:
             next_depth = current_depth + 1
         else:
@@ -268,20 +278,23 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
         # Look at children, use alpha beta pruning
         new_actions = gameState.getLegalActions(agent_index)
         for action in new_actions:
-            # Get child and recursively get its value
+            # Get child and get its value
             successor = gameState.generateSuccessor(agent_index, action)
             new_value = self.getMinimaxValue(successor, next_agent_index, next_depth, alpha, beta)
             # Update the value for v
             v = max(v, new_value)
+
             # Return (prune) if v is larger than smallest beta value (ghosts)
             if v > min(beta):
                 break
             # Update Pacman's alpha value
             alpha = max(alpha, v)
+
         return v
 
     def getMinValue(self, gameState, agent_index, current_depth, alpha, beta):
-        # Get max value:
+        """Auxiliary function. Returns the max value of the tree."""
+        # Initialize v
         v = 99999999
         # Get next agent
         next_agent_index = (agent_index + 1) % gameState.getNumAgents()
@@ -300,29 +313,31 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
             new_value = self.getMinimaxValue(successor, next_agent_index, next_depth, alpha, beta)
             # Update v
             v = min(v, new_value)
+
             # Return (prune) if v is smaller than alpha:
             if v < alpha:
                 break
             # Update this agent's beta value
             beta[agent_index - 1] = min(beta[agent_index - 1], v)
+
         return v
 
     def getMinimaxValue(self, gameState, agent_index, current_depth, alpha, beta):
 
-        # BASE CASES
+        # --- BASE CASES
         # If terminal state, return the score
         if gameState.isWin() or gameState.isLose():
             return gameState.getScore()
 
-        # If we exceeded max depth, estimate the utility with evaluationfunction
+        # If we exceeded max depth, estimate the utility with an evaluation function
         elif current_depth == self.depth+1:
             return self.evaluationFunction(gameState)
 
-        # RECURSIVE CASES --- now with alpha beta pruning:
+        # --- RECURSIVE CASES (using alpha beta pruning)
         # If not deep enough yet, then recursively get minimax values of children
         else:
             # Note: as we are using a list for the beta values, we have to make a copy, otherwise
-            # we will overwrite the results in each recursive call.
+            # we will overwrite the results in each recursive call!
             beta_copy = beta.copy()
 
             # In case we are Pacman (max player): call max value function
@@ -332,7 +347,6 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
 
             # In case we are NOT pacman (min player): call min value function
             else:
-
                 return self.getMinValue(gameState, agent_index, current_depth, alpha, beta_copy)
 
     def getAction(self, gameState: GameState):
@@ -343,12 +357,13 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
 
         # We will store all minimax values of children of root in a list:
         minimax_values = []
+
+        # Initialize alpha and beta. As there can be more min players, use a list.
+        alpha = -99999999
+        beta = [99999999] * (gameState.getNumAgents() - 1)
+
         # Get all possible actions, starting at the root
         legal_actions = gameState.getLegalActions(self.index)
-
-        alpha = -99999999
-        # As there can be more min players, use a list. Number of min players is number of agents - 1
-        beta = [99999999] * (gameState.getNumAgents() - 1)
 
         # Note: for first player, need to explore all children, can only prune in the children
         next_index = (self.index + 1) % gameState.getNumAgents()
@@ -357,6 +372,7 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
             successor = gameState.generateSuccessor(self.index, action)
             new_value = self.getMinimaxValue(successor, next_index, 1, alpha, beta.copy())
             minimax_values.append(new_value)
+
             # As in the minimax function itself, update the alpha/beta passed onto the next branch
             if self.index == 0:
                 alpha = max(alpha, new_value)
@@ -385,7 +401,6 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
       Your expectimax agent (question 4)
     """
 
-
     def getMaxValue(self, gameState, agent_index, current_depth):
         # Initialize v:
         v = -99999999
@@ -405,6 +420,7 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
             # Get child and recursively get its value
             successor = gameState.generateSuccessor(agent_index, action)
             new_value = self.getExpectimaxValue(successor, next_agent_index, next_depth)
+
             # Update the value for v
             v = max(v, new_value)
         return v
@@ -421,7 +437,7 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         else:
             next_depth = current_depth
 
-        # Look at children, use alpha beta pruning
+        # Get actions. The probability of an action is simply 1/#(actions).
         new_actions = gameState.getLegalActions(agent_index)
         p = 1/len(new_actions)
 
@@ -435,24 +451,23 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
 
     def getExpectimaxValue(self, gameState, agent_index, current_depth):
 
-        # BASE CASES
+        # --- BASE CASES
         # If terminal state, return the score
         if gameState.isWin() or gameState.isLose():
             return gameState.getScore()
 
-        # If we exceeded max depth, estimate the utility with evaluationfunction
+        # If we exceeded max depth, estimate the utility with an evaluation function
         elif current_depth == self.depth+1:
             return self.evaluationFunction(gameState)
 
-        # RECURSIVE CASES --- now with alpha beta pruning:
+        # --- RECURSIVE CASES
         # If not deep enough yet, then recursively get minimax values of children
         else:
-
             # In case we are Pacman (max player): call max value function
             if agent_index == 0:
                 return self.getMaxValue(gameState, agent_index, current_depth)
 
-            # In case we are NOT pacman (min player): call min value function
+            # In case we are NOT pacman (min player): call exp value function
             else:
                 return self.getExpValue(gameState, agent_index, current_depth)
 
@@ -500,21 +515,19 @@ def betterEvaluationFunction(currentGameState: GameState):
     Your extreme ghost-hunting, pellet-nabbing, food-gobbling, unstoppable
     evaluation function (question 5).
 
-    DESCRIPTION: <write something here so we know what you did>
+    DESCRIPTION: This evaluation function is inspired by the first question. It calculates the utility using similar
+    information. It does not consider the pellets (capsules), as I did not find a way to improve Pacman by incorporating
+    that information as well. Moreover, the performance of the agent using the current evaluation function is pretty
+    good such, and playing around with the different weights of the various terms in the evaluation function could
+    disrupt the behaviour of the agent. Therefore, it seemed safer to stick to the current agent.
     """
     "*** YOUR CODE HERE ***"
 
     # Get information for current
-    # capsulePositions = currentGameState.getCapsules()
-    # numberOfCapsules = len(capsulePositions)
     pos = currentGameState.getPacmanPosition()
     food = currentGameState.getFood()
     foodPositions = food.asList()
-    numberOfFood = len(foodPositions)
-    ghostStates = currentGameState.getGhostStates()
     ghostPositions = currentGameState.getGhostPositions()
-    numberOfGhosts = len(ghostPositions)
-    scaredTimes = [ghostState.scaredTimer for ghostState in ghostStates]
 
     "*** YOUR CODE HERE ***"
     # If no food left: we win!!!
@@ -527,47 +540,22 @@ def betterEvaluationFunction(currentGameState: GameState):
     # Get approximate distance to food and ghosts
     food_distances = [manhattanDistance(pos, foodPos) for foodPos in foodPositions]
     ghost_distances = [manhattanDistance(pos, ghostPos) for ghostPos in ghostPositions]
-    # capsule_distances = [manhattanDistance(pos, capsulePos) for capsulePos in capsulePositions]
 
     # Get extreme values:
     # for food:
     closest_food_distance = min(food_distances)
-    farthest_food_distance = max(food_distances)
     total_food_distance = sum(food_distances)
-
-    # # for capsules:
-    # if numberOfCapsules != 0:
-    #     consider_capsules = True
-    #     closest_capsule_distance = min(capsule_distances)
-    #     farthest_capsule_distance = max(capsule_distances)
-    #     total_capsule_distance = sum(capsule_distances)
-    # else:
-    #     consider_capsules = False
 
     # for ghosts:
     closest_ghost_distance = min(ghost_distances)
-
-    # For ghosts, also check if they are scared:
-    scared_value = min(scaredTimes)
 
     if closest_ghost_distance == 0:
         # Pacman dies
         return -999999999999999
 
-    # Check if we are in danger, i.e. a ghost closer than manhattan distance 3 and no pellet eaten:
-    danger_perimeter = 5
-    if closest_ghost_distance < danger_perimeter and 0 in scaredTimes:
-        # dangerous = True
-        ghost_sign = -1
-    else:
-        # dangerous = False
-        ghost_sign = +1
-
-    score = base_score + 1 / closest_food_distance
-    + 1 / total_food_distance - 1 / closest_ghost_distance
-
-    # score = base_score + 1 / closest_food_distance
-    # + 1 / total_food_distance + ghost_sign *100 / closest_ghost_distance + 100 / numberOfFood + 1000 * scared_value
+    # Compute the score
+    score = base_score + 1 / closest_food_distance + 1 / total_food_distance - 1 / closest_ghost_distance
+    return score
 
 
 # Abbreviation
