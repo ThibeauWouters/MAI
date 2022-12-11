@@ -3,9 +3,12 @@ import numpy as np
 import pandas as pd
 import csv
 import random
-from random import sample
 import matplotlib.pyplot as plt
 import time
+
+# Fix random seeds:
+np.random.seed(0)
+random.seed(0)
 
 # --- Auxiliary functions ---
 
@@ -43,11 +46,15 @@ class r0708518:
 		# Store default parameter values here
 		default_params_dict = {'lambdaa': 100, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
 							   "which_elimination": "lambda plus mu", "tournament_size": 5, "number_of_iterations": 100,
-							   "round_robin_size": 10, "random_perm_init_number": 100, "random_road_init_number": 0}
+							   "round_robin_size": 10, "random_perm_init_number": 100, "random_road_init_number": 0,
+							   "greedy_road_init_number": 0, "nnb_road_init_number": 0,
+							   "which_lso": "2-opt", "lso_pivot_rule": "greedy descent",
+							   "lso_init_sample_size": 100, "lso_rec_sample_size": 10, "lso_mut_sample_size": 10,
+							   "lso_init_depth": 5, "lso_rec_depth": 1, "lso_mut_depth": 1, "use_lso": False}
 
 		# TODO - check constraints, is the sum of init numbers equal to lambda? What if it's too large/small?
 
-		# Set the default (hyper)parameters
+		# Set the default (hyper)parametersf
 		for key in default_params_dict.keys():
 			setattr(self, key, default_params_dict[key])
 		# Overwrite the (hyper)parameters set by the user:
@@ -64,6 +71,30 @@ class r0708518:
 		self.no_improvement_max = self.number_of_iterations / 10
 		# Delta is the threshold for improvement between consecutive iterations (check convergence)
 		self.delta = -1
+		# Alpha is the mutation rate we start off with, but gets adapted
+		self.alpha = 1
+
+		# Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
+		# selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
+
+		# Mutation operators implemented in this algorithm:
+		# TODO - finish this and replace in the mutation part
+		self.implemented_mutation_operators = []
+
+		# Recombination operators implemented in this algorithm:
+		# TODO - finish this and replace in the recombination part
+		self.implemented_recombination_operators = []
+
+		# Selection operators implemented in this algorithm:
+		# TODO - finish this and replace in the selection part
+		self.implemented_selection_operators = []
+
+		# Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
+		self.implemented_probability_distributions = ["geom"]
+
+
+		# For testing: print the chosen operators etc, and check if they are implemented, otherwise select a default
+		# TODO - make sure the defaults are implemented correctly and conveniently?
 
 		# Choose which algorithm we are going to use for the various steps of the optimization loop
 		# self.which_mutation = which_mutation
@@ -80,6 +111,7 @@ class r0708518:
 
 	def optimize(self, filename):
 		"""The evolutionary algorithm's main loop"""
+		start = time.time()
 		# Create empty lists to be filled with values to report progress
 		mean_fit_values = []
 		best_fit_values = []
@@ -96,6 +128,8 @@ class r0708518:
 		max_distance = np.max(distanceMatrix.flatten())
 		penalty_value = 2 * max_distance
 		distanceMatrix = np.where(distanceMatrix == -1, penalty_value, distanceMatrix)
+		# Also apply the penalty for roads going from a city to itself (diagonal terms)
+		distanceMatrix = np.where(distanceMatrix == 0, penalty_value, distanceMatrix)
 
 		# Save the penalty term for convenience for later on
 		self.penalty_value = penalty_value
@@ -107,6 +141,21 @@ class r0708518:
 		# Also construct the connections matrix
 		# TODO - don't do this in case we don't initialize the population randomly in case that's ever the case
 		self.construct_connections_matrix()
+
+		# If LSO uses 2-opt, then generate all (i, j) pairs: this also determines the size of the neighbourhood
+		if self.which_lso == "2-opt":
+			self.two_opt_ij_pairs = np.array([np.array([i, j]) for i in range(1, self.n - 1) for j in range(i+1, self.n)])
+
+		# Make sure that the number of nb we want to sample does not exceed the size of the nb hood
+		self.lso_init_sample_size = max(self.lso_init_sample_size, len(self.two_opt_ij_pairs))
+		self.lso_rec_sample_size = max(self.lso_rec_sample_size, len(self.two_opt_ij_pairs))
+		self.lso_mut_sample_size = max(self.lso_mut_sample_size, len(self.two_opt_ij_pairs))
+		
+		# If we do steepest descent, this sample size is the nb size
+		if self.lso_pivot_rule == "steepest descent":
+			self.lso_init_sample_size = len(self.two_opt_ij_pairs)
+			self.lso_rec_sample_size = len(self.two_opt_ij_pairs)
+			self.lso_mut_sample_size = len(self.two_opt_ij_pairs)
 
 		# Allocate memory for population and offspring
 		self.population = np.empty((self.lambdaa, self.n + 1))
@@ -122,9 +171,11 @@ class r0708518:
 		current_best = 0
 		previous_best = 0
 
-		# The main evolutionary algorithm loop comes here:
-		start = time.time()
+		"""This is where the main evolutionary algorithm loop comes:"""
 		while global_counter < self.number_of_iterations and no_improvement_counter < self.no_improvement_max:
+			# Adapt hyperparameters:
+			alpha = self.alpha**(global_counter)
+
 			# Old best fitness value is previous 'current' one
 			previous_best = current_best
 
@@ -155,7 +206,10 @@ class r0708518:
 				p1, p2 = self.parents_selection()
 				# TODO - is there a redundant fitness calculation here?
 				child = self.recombination(p1[:-1], p2[:-1])
-				child = self.mutation(child[:-1])
+				child = self.lso(child, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
+				if random.uniform(0, 1) < alpha:
+					child = self.mutation(child[:-1])
+					child = self.lso(child, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
 				self.offspring[i] = child
 
 			# TODO - Mutate the original population as well?
@@ -163,7 +217,14 @@ class r0708518:
 			self.elimination()
 
 			global_counter += 1
-			self.iterationCounter += 1
+			# self.iterationCounter += 1
+
+			# TODO - what are some clever LSO activation rules?
+			### Check if we should activate the LSO
+			# if global_counter >= 0.99*self.number_of_iterations and self.use_lso == False:
+			# 	print("Before activating LSO: best %f" % best_objective)
+			# 	print("Before activating LSO: avrg %f" % mean_objective)
+			# 	self.use_lso = True
 
 			# Call the reporter with:
 			#  - the mean objective function value of the population
@@ -183,6 +244,7 @@ class r0708518:
 		print(
 			f"The algorithm took {number_of_minutes} minutes and {round(number_of_seconds)} seconds and {global_counter} iterations.")
 		print(f"The final best fitness value was {round(best_objective)}")
+		print(f"The final average fitness value was {round(mean_objective)}")
 		print(f"The final best individual was {best_solution}")
 		all_different = (len(pd.unique(best_solution)) == len(best_solution))
 		print(f"All different? {all_different}")
@@ -193,7 +255,7 @@ class r0708518:
 		# Return the best fitness value & best solution
 		# TODO - change this again
 		# return bestObjective, bestSolution
-		return best_objective, mean_objective, self.iterationCounter
+		return best_objective, mean_objective, global_counter
 
 	##########################
 	# --- INITIALIZATION --- #
@@ -217,6 +279,10 @@ class r0708518:
 		# Initialize by stochastically, greedily selecting the roads:
 		if self.greedy_road_init_number != 0:
 			subpopulations.append(self.road_initialize(self.greedy_road_init_number, method="greedy"))
+
+		# Initialize by nearest neighbours, but starting location is random:
+		if self.nnb_road_init_number != 0:
+			subpopulations.append(self.road_initialize(self.nnb_road_init_number, method="nearest nb"))
 
 		# Append all the subpopulations together in one big population array, save it
 		self.population = np.concatenate(subpopulations)
@@ -248,7 +314,144 @@ class r0708518:
 
 		self.connections_matrix = connections_matrix
 
+	def get_probabilities(self, values, distr="geom"):
+		"""Generates a numpy array of probabilities to select the entries of that numpy array.
+			values: numpy array containing the values for which we want to get probabilities
+			distr: string indiciating which distribution should be used for getting the probabilities. Default is
+			the geometric distribution, which is a discrete version of the exponential distribution."""
+
+		# TODO - take these values into account when getting the probabilities?
+		# TODO - these things such as "geom": get them as fields, to easily adapt to new things?
+		if distr not in self.implemented_probability_distributions:
+			distr = "geom"
+
+		# Geometric distribution:
+		if distr == "geom":
+			# Set the probability of success on each trial (p)
+			p = 0.5
+			# Set the number of failures before the first success (k)
+			k = np.array([i for i in range(len(values))])
+			# Calculate the probabilities for each value of k using the geometric probability distribution
+			probabilities = p * (1 - p) ** (k - 1)
+			return probabilities / np.sum(probabilities)
+
+	def construct_tour(self, current, final_index, final_city, method="random"):
+		"""Starting from an individual which is only constructed partially, continue constructing a full individual,
+			taking into account the possible connections (no infs in distance matrix) and possibly also take into
+			account the magnitude of the cost of taking a road. This function is called recursively, in order to
+			be able to backtrack in case we get "stuck", i.e., we end up in a city connected to cities which were
+			already selected in the construction of the individual.
+			Parameters:
+			current: individual, numpy array of size n, possibly containing -1 for cities which were not assigned yet
+			final_index: the index at which the final city in individual was assigned in a previous call
+			final_city: the city last assigned in the previous function call."""
+
+		# If the individual is finished, return it
+		if final_index == (self.n - 1):
+			return current
+
+		# Check where we can go from here, but permute randomly to avoid determinism in this function
+		# For the random method, we permute the connections in order to make it random
+		if method == "random":
+			current_connections = np.random.permutation(self.connections_matrix[final_city])
+		# For any other method, we keep the order
+		else:
+			current_connections = self.connections_matrix[final_city]
+		# From these possibilities, delete those that are already used
+		possible_connections = np.setdiff1d(current_connections, current, assume_unique=True)
+		# If no more options exist, break outside the loop (retry)
+		if len(possible_connections) == 0:
+			# print("Backtrack . . . ")
+			return None
+		# If OK: generate the next city randomly among possibilities
+		elif method == "random":
+			# Try each city in the connections until we finish the individual, then return
+			for current_city in possible_connections:
+				# If we had a successful addition, save into individual
+				current[final_index + 1] = current_city
+				# Continue the construction (recursive call!)
+				end = self.construct_tour(current, final_index+1, current_city)
+				# If the recursive call ends up with an individual, then return it and break all loops
+				if end is not None:
+					return end
+			# If we end up here, the for loop was unsuccesful, and backtrack "above":
+			return None
+
+		elif method == "greedy":
+			# Try each city in the connections until we finish the individual, then return
+			while len(possible_connections != 0):
+				# Get the probabilities to select cities
+				probabilities = self.get_probabilities(possible_connections)
+				# Select one
+				current_city = np.random.choice(possible_connections, p=probabilities)
+				selected_index = np.where(possible_connections == current_city)[0]
+				# Delete it from the possible connections in order to be able to backtrack afterwards
+				possible_connections = np.delete(possible_connections, selected_index)
+				# Save into individual
+				current[final_index + 1] = current_city
+				# Continue the construction (recursive call!)
+				end = self.construct_tour(current, final_index+1, current_city)
+				# If the recursive call ends up with an individual, then return it and break all loops
+				if end is not None:
+					return end
+			# If we end up here, we were unsuccesful and we need to backtrack above
+			return None
+
+		elif method == "nearest nb":
+			# Try each city in the connections until we finish the individual, then return
+			while len(possible_connections != 0):
+				# For nearest neighbours, choose the first city as this is closest
+				current_city = possible_connections[0]
+				# Delete it from the possible connections in order to be able to backtrack afterwards
+				possible_connections = possible_connections[1:]
+				# Save into individual
+				current[final_index + 1] = current_city
+				# Continue the construction (recursive call!)
+				end = self.construct_tour(current, final_index+1, current_city)
+				# If the recursive call ends up with an individual, then return it and break all loops
+				if end is not None:
+					return end
+			# If we end up here, we were unsuccesful and we need to backtrack above
+			return None
+
 	def road_initialize(self, number=10, method="random"):
+		if method not in ["random", "greedy", "nearest nb"]:
+			print("Initialization method not recognized. Defaulting to random.")
+			method = "random"
+
+		# Generate a "subpopulation" based on how many are generated using this method
+		result = np.empty((number, self.n + 1))
+
+		# Construct "number" amount of individuals
+		counter = 0
+		while counter < number:
+			# Initialize a new individual, start filling at zero
+			individual = np.full(self.n, -1)
+			# Pick a random starting point
+			starting_point = np.random.choice(self.n)
+			individual[0] = starting_point
+			# Call construct_tour, which recursively makes a road
+			individual = self.construct_tour(individual, 0, starting_point, method=method)
+			if individual is not None:
+				# Make sure that the genome starts with city 0 because of our convention
+				idzero = np.argwhere(individual == 0)[0][0]
+				individual = np.roll(individual, -idzero)
+				# Compute its fitness and return it
+				# print("Individual constructed:")
+				# print(individual)
+				fit = self.fitness(individual)
+				individual = np.append(individual, fit)
+				# Improve individual with LSO operator (nothing changed if lso_init_depth = 0)
+				individual = self.lso(individual, depth=self.lso_init_depth)
+				result[counter] = individual
+				counter += 1
+			else:
+				print("I might be stuck here...")
+
+		return result
+
+	@DeprecationWarning
+	def road_initialize_old(self, number=10, method="random"):
 		"""At each city, selects randomly along the valid roads to another city to generate the initial population.
 			Number: integer indicating how many individuals should be constructed in this way."""
 
@@ -267,7 +470,10 @@ class r0708518:
 			individual[0] = 0
 			seen = np.array([0])
 			current_city = 0
-			for i in range(1, self.n):
+			# Fill up the individual
+			i = 1
+			while i < self.n:
+			# for i in range(1, self.n):
 				# Check where we can go from here
 				current_connections = self.connections_matrix[current_city]
 				# From these possibilities, delete those that are already used
@@ -280,14 +486,7 @@ class r0708518:
 				if method == "random":
 					current_city = np.random.choice(possible_connections)
 				elif method == "greedy":
-					# Set the probability of success on each trial (p)
-					p = 0.5
-					# Set the number of failures before the first success (k)
-					k = np.array([i for i in range(len(possible_connections))])
-					# Calculate the probabilities for each value of k using the geometric probability distribution
-					probabilities = p * (1 - p) ** (k - 1)
-					normalization_factor = np.sum(probabilities)
-					probabilities = probabilities/normalization_factor
+					probabilities = self.get_probabilities(possible_connections)
 					current_city = np.random.choice(possible_connections, p=probabilities)
 				# Save into seen
 				seen = np.append(seen, current_city)
@@ -308,7 +507,9 @@ class r0708518:
 		return result
 
 	def random_perm_initialize(self, number=10):
-		"""Initialize individuals by a random permutation of the cities."""
+		"""Initialize individuals by a random permutation of the cities. Quick and easy, but may end up selecting
+			illegal roads, both inf roads as well as roads connecting a city to itself which may mislead the
+			algorithm since those have a low cost."""
 		# size = np.size(self.distance_matrix[0]) #old#
 
 		result = np.empty((number, self.n + 1))
@@ -843,6 +1044,55 @@ class r0708518:
 		# TODO - generalize to mu larger than lambda
 		self.population = self.offspring
 
+	########################
+	# --- LOCAL SEARCH --- #
+	########################
+
+	def lso(self, individual, depth=1, sample_size=10):
+		"""Performs a LSO. Individual contains genome and the fitness."""
+
+		# If we disabled the use of LSO, do nothing
+		if not self.use_lso:
+			return individual
+
+		# Base case, if depth of search is zero, do nothing
+		if depth == 0:
+			return individual
+
+		# Save initial values, ie fitness and corresponding genome, to "best"
+		best_fitness = individual[-1]
+		individual = individual[:-1]
+		best_individual = individual
+
+		if self.which_lso == "2-opt":
+			# Randomly permute the (i, j) pairs, from which neighbours are constructed, for a specified sample size
+			sampled_indices = np.random.choice(len(self.two_opt_ij_pairs), size=sample_size, replace=False)
+			sampled_neighbours = self.two_opt_ij_pairs[sampled_indices]
+			for (i, j) in sampled_neighbours:
+				# Get the next neighbour
+				neighbour = self.two_opt(individual, i, j)
+				# Compute its fitness, check if better than current best
+				fit = self.fitness(neighbour)
+				# If improvement is seen, save it
+				if fit < best_fitness:
+					best_fitness = fit
+					best_individual = neighbour
+					# If the pivot rule is greedy descent: return at first improvement
+					if self.lso_pivot_rule == "greedy descent":
+						# Append fitness at the end of the individual
+						best_individual = np.append(best_individual, best_fitness)
+						return self.lso(best_individual, depth=depth-1)
+
+			# If we reach the end of the while loop, this means that the current individual was the best one
+			best_individual = np.append(best_individual, best_fitness)
+			return self.lso(best_individual, depth=depth-1)
+
+	def two_opt(self, individual, i, j):
+		"""Applies the two-opt operator once to a single individual. That is, it takes a subtour and reverts it."""
+		# Get a subtour and reverse it
+		individual[i:j] = individual[i:j][::-1]
+		return individual
+
 	#################
 	# --- OTHER --- #
 	#################
@@ -887,10 +1137,11 @@ def analyze_operators():
 
 
 if __name__ == "__main__":
-	params_dict = {"mu": 50, "number_of_iterations": 1000, "random_perm_init_number": 50, "random_road_init_number": 25, "greedy_road_init_number": 25}
+	params_dict = {"mu": 50, "number_of_iterations": 100000, "random_perm_init_number": 0, "random_road_init_number": 50,
+				   "greedy_road_init_number": 0, "nnb_road_init_number": 50, "use_lso": False}
 	mytest = r0708518(params_dict)
 
-	mytest.optimize('./tour50.csv')
+	mytest.optimize('./tour250.csv')
 
 	# """Analyzing the performance of mutation and crossover operators"""
 	# analyze_operators()
