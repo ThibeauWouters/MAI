@@ -10,25 +10,30 @@ import time
 np.random.seed(0)
 random.seed(0)
 
+
 # --- Auxiliary functions ---
 
 def check_subset_numpy_arrays(a, b):
 	"""Returns true if a is a sub array of b"""
 	b = np.unique1d(b)
-	c = np.intersect1d(a,b)
+	c = np.intersect1d(a, b)
 	return np.size(c) == np.size(b)
+
 
 def make_plot(mean_fit_values, best_fit_values, filename):
 	# --- Plot the results
 	# TODO - delete this at the end
 	plt.figure(figsize=(7, 5))
-	plt.plot(mean_fit_values, '--o', color='red', label="Mean")
-	plt.plot(best_fit_values, '--o', color='blue', label="Best")
+	start = len(mean_fit_values) // 10
+	plt.plot([i for i in range(start, len(mean_fit_values))], mean_fit_values[start:], '--o', ms=2, color='red',
+			 label="Mean")
+	plt.plot([i for i in range(start, len(best_fit_values))], best_fit_values[start:], '--o', ms=2, color='blue',
+			 label="Best")
 	plt.legend()
 	plt.grid()
 	plt.xlabel('Iteration step')
 	plt.ylabel('Fitness')
-	plt.yscale('log')
+	# plt.yscale('log')
 	plt.title('TSP for ' + str(filename))
 	# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
 	plot_name = "plot_test_run"
@@ -37,6 +42,7 @@ def make_plot(mean_fit_values, best_fit_values, filename):
 	plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
 	plt.close()
 
+
 class r0708518:
 
 	def __init__(self, user_params_dict=None):
@@ -44,70 +50,60 @@ class r0708518:
 		self.distance_matrix = None
 
 		# Store default parameter values here
-		default_params_dict = {'lambdaa': 100, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
-							   "which_elimination": "lambda plus mu", "tournament_size": 5, "number_of_iterations": 100,
+		self.default_params_dict = {'lambdaa': 50, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
+							   "which_elimination": "lambda plus mu", "which_selection": "k tournament",
+								"tournament_size": 5, "number_of_iterations": 100,
 							   "round_robin_size": 10, "random_perm_init_number": 100, "random_road_init_number": 0,
-							   "greedy_road_init_number": 0, "nnb_road_init_number": 0,
-							   "which_lso": "2-opt", "lso_pivot_rule": "greedy descent",
-							   "lso_init_sample_size": 100, "lso_rec_sample_size": 10, "lso_mut_sample_size": 10,
-							   "lso_init_depth": 5, "lso_rec_depth": 1, "lso_mut_depth": 1, "use_lso": False}
+							   "greedy_road_init_number": 0, "nnb_road_init_number": 0, "which_lso": "2-opt",
+							   "lso_pivot_rule": "greedy descent", "lso_init_sample_size": 100,
+							   "lso_rec_sample_size": 10, "lso_mut_sample_size": 10, "lso_init_depth": 1,
+							   "lso_rec_depth": 1, "lso_mut_depth": 1, "use_lso": False,
+							   "alpha": 1, "delta": 0.1}
+
+		# TODO - declare all fields with explanation?
 
 		# TODO - check constraints, is the sum of init numbers equal to lambda? What if it's too large/small?
 
-		# Set the default (hyper)parametersf
-		for key in default_params_dict.keys():
-			setattr(self, key, default_params_dict[key])
+		# Set the default (hyper)parameters
+		for key in self.default_params_dict.keys():
+			setattr(self, key, self.default_params_dict[key])
 		# Overwrite the (hyper)parameters set by the user:
 		if user_params_dict is not None:
 			for key in user_params_dict:
 				setattr(self, key, user_params_dict[key])
-		# self.mu = 100
-		# Hyperparameters:
-		# self.tournament_size = 5
-		# max number of optimization cycles
-		# self.number_of_iterations = 100
-		# TODO - remove the following?
 		self.iterationCounter = 0
-		self.no_improvement_max = self.number_of_iterations / 10
+		self.no_improvement_max = 500
+		# TODO - remove the following?
 		# Delta is the threshold for improvement between consecutive iterations (check convergence)
-		self.delta = -1
+		# self.delta = 0.1
 		# Alpha is the mutation rate we start off with, but gets adapted
-		self.alpha = 1
+		# self.alpha = 1
 
 		# Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
 		# selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
-
-		# Mutation operators implemented in this algorithm:
-		# TODO - finish this and replace in the mutation part
-		self.implemented_mutation_operators = []
-
-		# Recombination operators implemented in this algorithm:
-		# TODO - finish this and replace in the recombination part
-		self.implemented_recombination_operators = []
-
-		# Selection operators implemented in this algorithm:
-		# TODO - finish this and replace in the selection part
-		self.implemented_selection_operators = []
+		self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
+		self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "CX", "EX", "AX", "GROUP"]
+		self.implemented_selection_operators     = ["k tournament"]
+		self.implemented_elimination_operators   = ["lambda plus mu", "lambda and mu", "round robin"]
 
 		# Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
 		self.implemented_probability_distributions = ["geom"]
 
-
 		# For testing: print the chosen operators etc, and check if they are implemented, otherwise select a default
 		# TODO - make sure the defaults are implemented correctly and conveniently?
 
-		# Choose which algorithm we are going to use for the various steps of the optimization loop
-		# self.which_mutation = which_mutation
-		print("Mutation operator: " + self.which_mutation)
-		# self.which_recombination = which_recombination
-		print("Recombination operator: " + self.which_recombination)
-		# self.which_elimination = which_elimination
+		# Show which implementations were chosen by the user:
+		print("Mutation operator:      %s" % self.which_mutation)
+		print("Recombination operator: %s" % self.which_recombination)
+		print("Elimination operator:   %s" % self.which_elimination)
+		print("Selection operator:     %s" % self.which_selection)
+
+		# TODO - allow for more general or check if condition is valid?
 		if self.which_elimination == "lambda and mu":
 			# For lambda and mu, where we replace current generation with offspring, make sure they are same size
 			smallest = min(self.lambdaa, self.mu)
 			self.lambdaa = smallest
 			self.mu = smallest
-		print("Elimination operator: " + self.which_elimination)
 
 	def optimize(self, filename):
 		"""The evolutionary algorithm's main loop"""
@@ -118,39 +114,40 @@ class r0708518:
 
 		# Read distance matrix from file.
 		file = open(filename)
-		distanceMatrix = np.loadtxt(file, delimiter=",")
+		distance_matrix = np.loadtxt(file, delimiter=",")
 		file.close()
 		# Replace inf values with just a penalty term
 		# TODO - what are good values for penalty term?
 		# First, replace inf values by -1
-		distanceMatrix = np.where(distanceMatrix == float('inf'), -1, distanceMatrix)
+		distance_matrix = np.where(distance_matrix == float('inf'), -1, distance_matrix)
 		# Get max value, use it to construct a penalty term, and replace again
-		max_distance = np.max(distanceMatrix.flatten())
+		max_distance = np.max(distance_matrix.flatten())
 		penalty_value = 2 * max_distance
-		distanceMatrix = np.where(distanceMatrix == -1, penalty_value, distanceMatrix)
+		distance_matrix = np.where(distance_matrix == -1, penalty_value, distance_matrix)
 		# Also apply the penalty for roads going from a city to itself (diagonal terms)
-		distanceMatrix = np.where(distanceMatrix == 0, penalty_value, distanceMatrix)
+		distance_matrix = np.where(distance_matrix == 0, penalty_value, distance_matrix)
 
 		# Save the penalty term for convenience for later on
 		self.penalty_value = penalty_value
 		# Save
-		self.distance_matrix = distanceMatrix
+		self.distance_matrix = distance_matrix
 		# Save n, the size of the problem (number of cities)
 		self.n = np.size(self.distance_matrix[0])
 
 		# Also construct the connections matrix
-		# TODO - don't do this in case we don't initialize the population randomly in case that's ever the case
 		self.construct_connections_matrix()
 
 		# If LSO uses 2-opt, then generate all (i, j) pairs: this also determines the size of the neighbourhood
+		# TODO - 2-opt without constructing this list as it's likely too expensive memory-wise for the larger problems?
 		if self.which_lso == "2-opt":
-			self.two_opt_ij_pairs = np.array([np.array([i, j]) for i in range(1, self.n - 1) for j in range(i+1, self.n)])
+			self.two_opt_ij_pairs = np.array(
+				[np.array([i, j]) for i in range(1, self.n - 1) for j in range(i + 1, self.n)])
 
 		# Make sure that the number of nb we want to sample does not exceed the size of the nb hood
 		self.lso_init_sample_size = max(self.lso_init_sample_size, len(self.two_opt_ij_pairs))
 		self.lso_rec_sample_size = max(self.lso_rec_sample_size, len(self.two_opt_ij_pairs))
 		self.lso_mut_sample_size = max(self.lso_mut_sample_size, len(self.two_opt_ij_pairs))
-		
+
 		# If we do steepest descent, this sample size is the nb size
 		if self.lso_pivot_rule == "steepest descent":
 			self.lso_init_sample_size = len(self.two_opt_ij_pairs)
@@ -174,7 +171,7 @@ class r0708518:
 		"""This is where the main evolutionary algorithm loop comes:"""
 		while global_counter < self.number_of_iterations and no_improvement_counter < self.no_improvement_max:
 			# Adapt hyperparameters:
-			alpha = self.alpha**(global_counter)
+			alpha = self.alpha ** (global_counter)
 
 			# Old best fitness value is previous 'current' one
 			previous_best = current_best
@@ -294,9 +291,10 @@ class r0708518:
 			are ordered based on their cost, ranging from low to high. The result is saved as instance."""
 		# Get the connections matrix, showing the valid routes
 		connections_matrix = []
-		all_roads = np.array([i for i in range(self.n)])
 
 		for i in range(self.n):
+			# Get all the roads
+			all_roads = np.array([i for i in range(self.n)])
 			# Look at the next row
 			row = self.distance_matrix[i]
 			# Get the indices where the distance is not equal to the penalty value (inf in matrix, illegal road)
@@ -328,7 +326,7 @@ class r0708518:
 		# Geometric distribution:
 		if distr == "geom":
 			# Set the probability of success on each trial (p)
-			p = 0.5
+			p = 0.4
 			# Set the number of failures before the first success (k)
 			k = np.array([i for i in range(len(values))])
 			# Calculate the probabilities for each value of k using the geometric probability distribution
@@ -345,6 +343,8 @@ class r0708518:
 			current: individual, numpy array of size n, possibly containing -1 for cities which were not assigned yet
 			final_index: the index at which the final city in individual was assigned in a previous call
 			final_city: the city last assigned in the previous function call."""
+
+		# print(current)
 
 		# If the individual is finished, return it
 		if final_index == (self.n - 1):
@@ -370,7 +370,7 @@ class r0708518:
 				# If we had a successful addition, save into individual
 				current[final_index + 1] = current_city
 				# Continue the construction (recursive call!)
-				end = self.construct_tour(current, final_index+1, current_city)
+				end = self.construct_tour(current, final_index + 1, current_city)
 				# If the recursive call ends up with an individual, then return it and break all loops
 				if end is not None:
 					return end
@@ -390,7 +390,7 @@ class r0708518:
 				# Save into individual
 				current[final_index + 1] = current_city
 				# Continue the construction (recursive call!)
-				end = self.construct_tour(current, final_index+1, current_city)
+				end = self.construct_tour(current, final_index + 1, current_city, method=method)
 				# If the recursive call ends up with an individual, then return it and break all loops
 				if end is not None:
 					return end
@@ -401,13 +401,16 @@ class r0708518:
 			# Try each city in the connections until we finish the individual, then return
 			while len(possible_connections != 0):
 				# For nearest neighbours, choose the first city as this is closest
+				# print("Current connections: ", possible_connections)
+				# print("All cost values : ", self.distance_matrix[final_city][possible_connections])
 				current_city = possible_connections[0]
+				# print("Chosen cost: ", self.distance_matrix[final_city][current_city])
 				# Delete it from the possible connections in order to be able to backtrack afterwards
 				possible_connections = possible_connections[1:]
 				# Save into individual
 				current[final_index + 1] = current_city
 				# Continue the construction (recursive call!)
-				end = self.construct_tour(current, final_index+1, current_city)
+				end = self.construct_tour(current, final_index + 1, current_city, method=method)
 				# If the recursive call ends up with an individual, then return it and break all loops
 				if end is not None:
 					return end
@@ -473,7 +476,7 @@ class r0708518:
 			# Fill up the individual
 			i = 1
 			while i < self.n:
-			# for i in range(1, self.n):
+				# for i in range(1, self.n):
 				# Check where we can go from here
 				current_connections = self.connections_matrix[current_city]
 				# From these possibilities, delete those that are already used
@@ -536,6 +539,12 @@ class r0708518:
 	def recombination(self, parent1, parent2):
 		"""Performs the chosen recombination operator."""
 
+		# Make sure the given option is implemented, otherwise use default
+		if self.which_recombination not in self.implemented_recombination_operators:
+			default = self.default_params_dict["which_recombination"]
+			print("Recombination operator not recognized. Using default: %s" % default)
+			self.which_recombination = default
+
 		if self.which_recombination == "PMX":
 			return self.partially_mapped_crossover(parent1, parent2)
 		elif self.which_recombination == "SCX":
@@ -550,7 +559,6 @@ class r0708518:
 			return self.edge_crossover(parent1, parent2)
 		elif self.which_recombination == "AX":
 			return self.alternating_crossover(parent1, parent2)
-
 		elif self.which_recombination == "GROUP":
 			return self.group_recombination(parent1, parent2)
 
@@ -839,6 +847,13 @@ class r0708518:
 
 	def mutation(self, individual):
 		"""Performs the chosen mutation (chosen at initialization of self)"""
+
+		# Make sure the given option is implemented, otherwise use default
+		if self.which_mutation not in self.implemented_mutation_operators:
+			default = self.default_params_dict["which_mutation"]
+			print("Mutation operator not recognized. Using default: %s" % default)
+			self.which_mutation = default
+
 		if self.which_mutation == "EM":
 			return self.exchange_mutation(individual)
 		elif self.which_mutation == "DM":
@@ -853,8 +868,6 @@ class r0708518:
 			return self.scramble_mutation(individual)
 		elif self.which_mutation == "SDM":
 			return self.scrambled_displacement_mutation(individual)
-
-		# Default choice (or: no mutation operator is given)
 		else:
 			return self.simple_inversion_mutation(individual)
 
@@ -972,7 +985,14 @@ class r0708518:
 	# Selecting parents to generate the offspring
 
 	def parents_selection(self):
-		return self.k_tournament_selection()
+		# Make sure the given option is implemented, otherwise use default
+		if self.which_selection not in self.implemented_selection_operators:
+			default = self.default_params_dict["which_selection"]
+			print("Selection operator not recognized. Using default: %s" % default)
+			self.which_selection = default
+
+		if self.which_selection == "k tournament":
+			return self.k_tournament_selection()
 
 	def k_tournament_selection(self):
 		"""Performs k tournament selection. Returns two parents, including fitness value, to perform recombination."""
@@ -990,6 +1010,13 @@ class r0708518:
 
 	def elimination(self):
 		"""Choose the algorithm to perform the elimination phase"""
+
+		# Make sure the given option is implemented, otherwise use default
+		if self.which_elimination not in self.implemented_elimination_operators:
+			default = self.default_params_dict["which_elimination"]
+			print("Elimination operator not recognized. Using default: %s" % default)
+			self.which_elimination = default
+
 		if self.which_elimination == "lambda plus mu":
 			self.lambda_plus_mu_elimination()
 
@@ -1081,11 +1108,11 @@ class r0708518:
 					if self.lso_pivot_rule == "greedy descent":
 						# Append fitness at the end of the individual
 						best_individual = np.append(best_individual, best_fitness)
-						return self.lso(best_individual, depth=depth-1)
+						return self.lso(best_individual, depth=depth - 1)
 
 			# If we reach the end of the while loop, this means that the current individual was the best one
 			best_individual = np.append(best_individual, best_fitness)
-			return self.lso(best_individual, depth=depth-1)
+			return self.lso(best_individual, depth=depth - 1)
 
 	def two_opt(self, individual, i, j):
 		"""Applies the two-opt operator once to a single individual. That is, it takes a subtour and reverts it."""
@@ -1137,11 +1164,11 @@ def analyze_operators():
 
 
 if __name__ == "__main__":
-	params_dict = {"mu": 50, "number_of_iterations": 100000, "random_perm_init_number": 0, "random_road_init_number": 50,
-				   "greedy_road_init_number": 0, "nnb_road_init_number": 50, "use_lso": False}
+	params_dict = {"mu": 50, "number_of_iterations": 200, "random_perm_init_number": 0, "random_road_init_number": 40,
+				   "greedy_road_init_number": 50, "nnb_road_init_number": 10, "use_lso": False}
 	mytest = r0708518(params_dict)
 
-	mytest.optimize('./tour250.csv')
+	mytest.optimize('./tour50.csv')
 
 	# """Analyzing the performance of mutation and crossover operators"""
 	# analyze_operators()
