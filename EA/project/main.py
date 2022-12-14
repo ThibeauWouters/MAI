@@ -5,6 +5,8 @@ import csv
 import random
 import matplotlib.pyplot as plt
 import time
+import sys
+sys.setrecursionlimit(10000)
 
 # Fix random seeds:
 np.random.seed(0)
@@ -20,7 +22,30 @@ def check_subset_numpy_arrays(a, b):
 	return np.size(c) == np.size(b)
 
 
-def make_plot(mean_fit_values, best_fit_values, filename):
+def make_diversity_plot(diversities, filename, cooldown):
+	# --- Plot the diversity observed during the run
+	# TODO - delete this at the end
+	plt.figure(figsize=(7, 5))
+	start = len(diversities) // 10
+	remainder = diversities[start:]
+	xt = [start + i*cooldown for i in range(len(remainder))]
+	plt.plot(xt, remainder, '--o', ms=4, color='red')
+	plt.axhline(0, color='black')
+	# TODO - also save the threshold value for diversity promotion here
+	# plt.axhline(0, color='black')
+	plt.axhline(1, color='black')
+	plt.grid()
+	plt.xlabel('Iteration step')
+	plt.ylabel('Average Hamming distance (sampled)')
+	plt.title('Diversity during algorithm for ' + str(filename))
+	# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
+	plot_name = "plot_diversities"
+	# Save the plots (as PNG and PDF)
+	plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
+	plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
+	plt.close()
+
+def make_fitness_plot(mean_fit_values, best_fit_values, filename):
 	# --- Plot the results
 	# TODO - delete this at the end
 	plt.figure(figsize=(7, 5))
@@ -50,15 +75,15 @@ class r0708518:
 		self.distance_matrix = None
 
 		# Store default parameter values here
-		self.default_params_dict = {'lambdaa': 50, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
+		self.default_params_dict = {'lambdaa': 100, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
 							   "which_elimination": "lambda plus mu", "which_selection": "k tournament",
 								"tournament_size": 5, "number_of_iterations": 100,
-							   "round_robin_size": 10, "random_perm_init_number": 100, "random_road_init_number": 0,
-							   "greedy_road_init_number": 0, "nnb_road_init_number": 0, "which_lso": "2-opt",
+							   "round_robin_size": 10, "random_perm_init_number": 0, "random_road_init_number": 50,
+							   "greedy_road_init_number": 40, "nnb_road_init_number": 10, "which_lso": "2-opt",
 							   "lso_pivot_rule": "greedy descent", "lso_init_sample_size": 100,
 							   "lso_rec_sample_size": 10, "lso_mut_sample_size": 10, "lso_init_depth": 1,
 							   "lso_rec_depth": 1, "lso_mut_depth": 1, "use_lso": False,
-							   "alpha": 1, "delta": 0.1}
+							   "alpha": 1, "delta": -0.1, "which_metric": "Hamming", "diversity_check_cooldown": 5}
 
 		# TODO - declare all fields with explanation?
 
@@ -89,6 +114,9 @@ class r0708518:
 		# Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
 		self.implemented_probability_distributions = ["geom"]
 
+		# Metrics to measure distances between individuals
+		self.implemented_metrics = ["Hamming"]
+
 		# For testing: print the chosen operators etc, and check if they are implemented, otherwise select a default
 		# TODO - make sure the defaults are implemented correctly and conveniently?
 
@@ -111,6 +139,9 @@ class r0708518:
 		# Create empty lists to be filled with values to report progress
 		mean_fit_values = []
 		best_fit_values = []
+
+		# To keep track of diversity, measure it
+		diversities = []
 
 		# Read distance matrix from file.
 		file = open(filename)
@@ -198,6 +229,10 @@ class r0708518:
 			mean_fit_values.append(mean_objective)
 			best_fit_values.append(best_objective)
 
+			# Keep track of diversity: (with certain cooldown)
+			if global_counter % self.diversity_check_cooldown == 0:
+				diversities.append(self.measure_diversity())
+
 			# Generate new offspring
 			for i in range(self.mu):
 				p1, p2 = self.parents_selection()
@@ -239,15 +274,19 @@ class r0708518:
 		number_of_minutes = time_diff // 60
 		number_of_seconds = time_diff % 60
 		print(
-			f"The algorithm took {number_of_minutes} minutes and {round(number_of_seconds)} seconds and {global_counter} iterations.")
-		print(f"The final best fitness value was {round(best_objective)}")
-		print(f"The final average fitness value was {round(mean_objective)}")
-		print(f"The final best individual was {best_solution}")
-		all_different = (len(pd.unique(best_solution)) == len(best_solution))
-		print(f"All different? {all_different}")
+			f"The algorithm took {number_of_minutes} m {round(number_of_seconds)} s and {global_counter} iterations.")
+		print("The final best    fitness value was {:,}".format(round(best_objective)).replace(',', ' '))
+		print("The final average fitness value was {:,}".format(round(mean_objective)).replace(',', ' '))
+		# print(f"The final best individual was: {best_solution}")
+		# TODO - delete this for testing purposes
+		# all_different = (len(pd.unique(best_solution)) == len(best_solution))
+		# print(f"All different? {all_different}")
 
 		# For our own purpose, make a plot as well:
-		make_plot(mean_fit_values, best_fit_values, filename)
+		make_fitness_plot(mean_fit_values, best_fit_values, filename)
+		make_diversity_plot(diversities, filename, self.diversity_check_cooldown)
+
+		# Plot diversity
 
 		# Return the best fitness value & best solution
 		# TODO - change this again
@@ -1120,6 +1159,46 @@ class r0708518:
 		individual[i:j] = individual[i:j][::-1]
 		return individual
 
+
+	#######################
+	# DIVERSITY PROMOTION #
+	#######################
+
+	def measure_distance(self, first, second):
+		"""Measures the distance between two individuals of the population."""
+
+		if self.which_metric not in self.implemented_metrics:
+			self.which_metric = self.default_params_dict["which_metric"]
+			print("Metric not recognized. Defaulting to: ", self.which_metric)
+
+		if self.which_metric == "Hamming":
+			return self.hamming_distance(first, second)
+
+	def hamming_distance(self, first, second):
+		return np.sum(np.where(first != second, 1, 0))
+
+	def measure_diversity(self, sample_size=25):
+		"""Measures the diversity of the population"""
+
+		sample_indices = np.random.choice(self.lambdaa, size=sample_size)
+		sample = self.population[sample_indices]
+
+		counter = 0
+		total_distance = 0
+
+		for i in range(len(sample) - 1):
+			for j in range(i+1, len(sample)):
+				# Note: the distance is divided by the problem size, such that the concept of "diversity" does not
+				# depend on the problem size. This allows us to design diversity promotion techniques valid for all
+				# sizes of the TSP.
+				total_distance += (self.measure_distance(sample[i], sample[j]))/self.n
+				counter += 1
+
+		return total_distance/counter
+
+
+
+
 	#################
 	# --- OTHER --- #
 	#################
@@ -1129,7 +1208,7 @@ class r0708518:
 		fitness = 0
 
 		# Make sure that the entries are seen as integers:
-		tour = tour.astype('int')
+		# tour = tour.astype('int')
 
 		# For the 'body' of the tour:
 		for i in range(len(tour) - 1):
@@ -1137,7 +1216,7 @@ class r0708518:
 
 		# 'Close' the tour:
 		fitness += self.distance_matrix[tour[-1], tour[0]]
-		return fitness
+		return int(round(fitness))
 
 
 def analyze_operators():
@@ -1164,13 +1243,10 @@ def analyze_operators():
 
 
 if __name__ == "__main__":
-	params_dict = {"mu": 50, "number_of_iterations": 200, "random_perm_init_number": 0, "random_road_init_number": 40,
-				   "greedy_road_init_number": 50, "nnb_road_init_number": 10, "use_lso": False}
+	params_dict = {"number_of_iterations": 1000, "random_perm_init_number": 0, "random_road_init_number": 100,
+				   "greedy_road_init_number": 0, "nnb_road_init_number": 0, "use_lso": False}
 	mytest = r0708518(params_dict)
 
-	mytest.optimize('./tour50.csv')
-
-	# """Analyzing the performance of mutation and crossover operators"""
-	# analyze_operators()
+	mytest.optimize('./tour100.csv')
 
 	pass
