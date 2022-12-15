@@ -6,6 +6,7 @@ import random
 import matplotlib.pyplot as plt
 import time
 import sys
+# from math import ceil
 sys.setrecursionlimit(10000)
 
 # Fix random seeds:
@@ -80,10 +81,11 @@ class r0708518:
 								"tournament_size": 5, "number_of_iterations": 100,
 							   "round_robin_size": 10, "random_perm_init_number": 0, "random_road_init_number": 50,
 							   "greedy_road_init_number": 40, "nnb_road_init_number": 10, "which_lso": "2-opt",
-							   "lso_pivot_rule": "greedy descent", "lso_init_sample_size": 100,
-							   "lso_rec_sample_size": 10, "lso_mut_sample_size": 10, "lso_init_depth": 1,
-							   "lso_rec_depth": 1, "lso_mut_depth": 1, "use_lso": False,
-							   "alpha": 1, "delta": -0.1, "which_metric": "Hamming", "diversity_check_cooldown": 5}
+							   "lso_pivot_rule": "greedy descent", "lso_init_sample_size": 100, "lso_init_depth": 0,
+							   "lso_rec_sample_size": 10, "lso_rec_depth": 0, "lso_mut_sample_size": 10,
+							    "lso_mut_depth": 0, "lso_elim_sample_size": 10, "lso_elim_depth": 1, "use_lso": False,
+								"alpha": 1, "delta": -0.1, "which_metric": "Hamming", "diversity_check_cooldown": 5,
+								"lso_cooldown": 500}
 
 		# TODO - declare all fields with explanation?
 
@@ -170,24 +172,24 @@ class r0708518:
 
 		# If LSO uses 2-opt, then generate all (i, j) pairs: this also determines the size of the neighbourhood
 		# TODO - 2-opt without constructing this list as it's likely too expensive memory-wise for the larger problems?
-		if self.which_lso == "2-opt":
-			self.two_opt_ij_pairs = np.array(
-				[np.array([i, j]) for i in range(1, self.n - 1) for j in range(i + 1, self.n)])
+		# if self.which_lso == "2-opt":
+		# 	self.two_opt_ij_pairs = np.array(
+		# 		[np.array([i, j]) for i in range(1, self.n - 1) for j in range(i + 1, self.n)])
 
 		# Make sure that the number of nb we want to sample does not exceed the size of the nb hood
-		self.lso_init_sample_size = max(self.lso_init_sample_size, len(self.two_opt_ij_pairs))
-		self.lso_rec_sample_size = max(self.lso_rec_sample_size, len(self.two_opt_ij_pairs))
-		self.lso_mut_sample_size = max(self.lso_mut_sample_size, len(self.two_opt_ij_pairs))
+		# self.lso_init_sample_size = max(self.lso_init_sample_size, len(self.two_opt_ij_pairs))
+		# self.lso_rec_sample_size = max(self.lso_rec_sample_size, len(self.two_opt_ij_pairs))
+		# self.lso_mut_sample_size = max(self.lso_mut_sample_size, len(self.two_opt_ij_pairs))
 
 		# If we do steepest descent, this sample size is the nb size
-		if self.lso_pivot_rule == "steepest descent":
-			self.lso_init_sample_size = len(self.two_opt_ij_pairs)
-			self.lso_rec_sample_size = len(self.two_opt_ij_pairs)
-			self.lso_mut_sample_size = len(self.two_opt_ij_pairs)
+		# if self.lso_pivot_rule == "steepest descent":
+		# 	self.lso_init_sample_size = len(self.two_opt_ij_pairs)
+		# 	self.lso_rec_sample_size = len(self.two_opt_ij_pairs)
+		# 	self.lso_mut_sample_size = len(self.two_opt_ij_pairs)
 
 		# Allocate memory for population and offspring
-		self.population = np.empty((self.lambdaa, self.n + 1))
-		self.offspring = np.empty((self.mu, self.n + 1))
+		self.population = np.empty((self.lambdaa, self.n + 1), dtype='int')
+		self.offspring = np.empty((self.mu, self.n + 1), dtype='int')
 
 		# Initialize the population, and sort based on the final column, which contains the fitness value
 		self.initialize()
@@ -235,20 +237,50 @@ class r0708518:
 
 			# Generate new offspring
 			for i in range(self.mu):
-				p1, p2 = self.parents_selection()
+				parent1, parent2 = self.parents_selection()
 				# TODO - is there a redundant fitness calculation here?
-				child = self.recombination(p1[:-1], p2[:-1])
+				parent_fitness = parent1[-1]
+				# Note: recombination and mutation ONLY work with genome, NOT the fitness at the end
+				# here, "child" has no fitness at the end and is only refering to the genome!
+				child = self.recombination(parent1[:-1], parent2[:-1])
 				child = self.lso(child, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
-				if random.uniform(0, 1) < alpha:
-					child = self.mutation(child[:-1])
+				if random.uniform(0, 1) <= alpha:
+					child = self.mutation(child)
 					child = self.lso(child, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
+				# Now, compute the fitness and append it to save into offspring array
+				# TODO - delete this test
+				child_fitness = self.efficient_fitness(child, parent1[:-1], parent_fitness)
+				# diff = self.difference_fitness(parent1[:-1], child)
+				# child_fitness = round(parent_fitness + diff)
+				# print("The fit value of child with diff: %d" % child_fitness)
+				# Old method
+				old_method = self.fitness(child)
+				if abs(old_method - child_fitness) > 2:
+					print("Old: ", old_method)
+					print("Diff: ", child_fitness)
+					print("Bug in difference method")
+				# print("The fit value of child with old:  %d" % child_fitness)
+				child = np.append(child, child_fitness)
 				self.offspring[i] = child
 
 			# TODO - Mutate the original population as well?
-			# Eliminate
+			# Do LSO (if enabled) before the elimination phase
+			# on population:
+			for i in range(len(self.population)):
+				self.population[i] = self.lso(self.population[i], depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+			# on offspring:
+			for i in range(len(self.offspring)):
+				self.offspring[i] = self.lso(self.offspring[i], depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+			# Elimination phase
 			self.elimination()
 
 			global_counter += 1
+			# Activate the LSO after certain number of iterations
+			if (global_counter % self.lso_cooldown) == 0:
+				self.use_lso = True
+			else:
+				self.use_lso = False
+
 			# self.iterationCounter += 1
 
 			# TODO - what are some clever LSO activation rules?
@@ -624,8 +656,8 @@ class r0708518:
 		child[~new_indices] = parent1[~new_indices]
 		child[new_indices] = cities
 
-		fit = self.fitness(child)
-		child = np.append(child, fit)
+		# fit = self.fitness(child)
+		# child = np.append(child, fit)
 		return child
 
 	def alternating_crossover(self, parent1, parent2):
@@ -636,8 +668,8 @@ class r0708518:
 		child[1::2] = parent2
 		child = pd.unique(child)
 
-		fit = self.fitness(child)
-		child = np.append(child, fit)
+		# fit = self.fitness(child)
+		# child = np.append(child, fit)
 		return child
 
 	def edge_crossover(self, parent1, parent2):
@@ -715,8 +747,8 @@ class r0708518:
 			child[i] = current_element
 			unassigned.remove(current_element)
 
-		fit = self.fitness(child)
-		child = np.append(child, fit)
+		# fit = self.fitness(child)
+		# child = np.append(child, fit)
 		return child
 
 	def order_crossover(self, parent1, parent2):
@@ -734,8 +766,8 @@ class r0708518:
 		idzero = np.argwhere(child == 0)[0][0]
 		child = np.roll(child, -idzero)
 
-		fit = self.fitness(child)
-		child = np.append(child, fit)
+		# fit = self.fitness(child)
+		# child = np.append(child, fit)
 		return child
 
 	def single_cycle_crossover(self, parent1, parent2):
@@ -761,11 +793,11 @@ class r0708518:
 			child[next_index] = parent1[next_index]
 
 			index = next_index
-			# In case we completed the cycle, start the next 'cycle' -- swap order of parents
+			# In case we completed the cycle, DON'T start a next 'cycle' simply return (copy parent2)
 			if index == first_index:
 				child = np.where(child == -1, parent2, child)
-				fit = self.fitness(child)
-				child = np.append(child, fit)
+				# fit = self.fitness(child)
+				# child = np.append(child, fit)
 				return child
 
 	def cycle_crossover(self, parent1, parent2):
@@ -796,8 +828,8 @@ class r0708518:
 			# In case we completed the cycle, start the next 'cycle' -- swap order of parents
 			if index == first_index:
 				if -1 not in child:
-					fit = self.fitness(child)
-					child = np.append(child, fit)
+					# fit = self.fitness(child)
+					# child = np.append(child, fit)
 					return child
 				else:
 					# Start a new cycle
@@ -851,8 +883,8 @@ class r0708518:
 
 		# print("Child ", child1)
 
-		fit = self.fitness(child1)
-		child1 = np.append(child1, fit)
+		# fit = self.fitness(child1)
+		# child1 = np.append(child1, fit)
 		return child1
 
 	def group_recombination(self, parent1, parent2):
@@ -876,8 +908,8 @@ class r0708518:
 		child[leftover_indices] = leftover_cities_permuted
 
 		# Compute the fitness value and return
-		fit = self.fitness(child)
-		child = np.append(child, fit)
+		# fit = self.fitness(child)
+		# child = np.append(child, fit)
 		return child
 
 	####################
@@ -923,8 +955,8 @@ class r0708518:
 		insertion_point = random.randint(1, len(individual))
 		individual = np.insert(individual, insertion_point, np.random.permutation(subtour))
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def scramble_mutation(self, individual):
@@ -934,8 +966,8 @@ class r0708518:
 		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
 		individual[a:b] = np.random.permutation(individual[a:b])
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def inversion_mutation(self, individual):
@@ -951,8 +983,8 @@ class r0708518:
 		insertion_point = random.randint(1, len(individual))
 		individual = np.insert(individual, insertion_point, subtour[::-1])
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def insertion_mutation(self, individual):
@@ -967,8 +999,8 @@ class r0708518:
 		# Insert it at a random position
 		individual = np.insert(individual, b, subtour)
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def simple_inversion_mutation(self, individual):
@@ -978,8 +1010,8 @@ class r0708518:
 		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
 		individual[a:b] = individual[a:b][::-1]
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def displacement_mutation(self, individual):
@@ -995,8 +1027,8 @@ class r0708518:
 		insertion_point = random.randint(1, len(individual))
 		individual = np.insert(individual, insertion_point, subtour)
 
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	def exchange_mutation(self, individual):
@@ -1013,8 +1045,8 @@ class r0708518:
 
 		# Flip cities at those locations. Compute fitness and return
 		individual[indices] = individual[np.flip(indices)]
-		fit = self.fitness(individual)
-		individual = np.append(individual, fit)
+		# fit = self.fitness(individual)
+		# individual = np.append(individual, fit)
 		return individual
 
 	#####################
@@ -1132,33 +1164,38 @@ class r0708518:
 
 		if self.which_lso == "2-opt":
 			# Randomly permute the (i, j) pairs, from which neighbours are constructed, for a specified sample size
-			sampled_indices = np.random.choice(len(self.two_opt_ij_pairs), size=sample_size, replace=False)
-			sampled_neighbours = self.two_opt_ij_pairs[sampled_indices]
-			for (i, j) in sampled_neighbours:
+			# sampled_indices = np.random.choice(len(self.two_opt_ij_pairs), size=sample_size, replace=False)
+			# sampled_neighbours = self.two_opt_ij_pairs[sampled_indices]
+			# NOTE - may contain duplicates
+			sampled_indices = [np.sort(np.random.choice(self.n, size=2)) for i in range(sample_size)]
+			for (i, j) in sampled_indices:
 				# Get the next neighbour
 				neighbour = self.two_opt(individual, i, j)
 				# Compute its fitness, check if better than current best
-				fit = self.fitness(neighbour)
+				# fit = self.fitness(neighbour)
+				difference = self.difference_fitness(individual, neighbour)
+				# print("difference: ", difference)
 				# If improvement is seen, save it
-				if fit < best_fitness:
-					best_fitness = fit
+				if difference < 0:
+					# print("difference negative observed")
+					best_fitness += difference
 					best_individual = neighbour
 					# If the pivot rule is greedy descent: return at first improvement
 					if self.lso_pivot_rule == "greedy descent":
 						# Append fitness at the end of the individual
 						best_individual = np.append(best_individual, best_fitness)
-						return self.lso(best_individual, depth=depth - 1)
+						return self.lso(best_individual, depth=depth-1, sample_size=sample_size)
 
 			# If we reach the end of the while loop, this means that the current individual was the best one
 			best_individual = np.append(best_individual, best_fitness)
-			return self.lso(best_individual, depth=depth - 1)
+			return self.lso(best_individual, depth=depth - 1, sample_size=sample_size)
 
 	def two_opt(self, individual, i, j):
 		"""Applies the two-opt operator once to a single individual. That is, it takes a subtour and reverts it."""
 		# Get a subtour and reverse it
-		individual[i:j] = individual[i:j][::-1]
-		return individual
-
+		clone = np.copy(individual)
+		clone[i:j] = individual[i:j][::-1]
+		return clone
 
 	#######################
 	# DIVERSITY PROMOTION #
@@ -1196,19 +1233,32 @@ class r0708518:
 
 		return total_distance/counter
 
-
-
-
 	#################
 	# --- OTHER --- #
 	#################
+
+	def efficient_fitness(self, new, old=None, old_fitness=None):
+		"""Implements a more efficient version """
+		# In case we don't compare two genomes: just compute the fitness
+		if new is None:
+			return self.fitness(new)
+
+		# If we compare genomes, check which version is more efficient
+		else:
+			# If there is too much difference between genomes, compute fitness old way
+			if self.hamming_distance(old, new) > self.n//2:
+				return self.fitness(new)
+			# If there is little difference between genomes, compute by comparison
+			else:
+				difference = self.difference_fitness(old, new)
+				return round(old_fitness + difference)
 
 	def fitness(self, tour):
 		"""Computes the fitness value of an individual"""
 		fitness = 0
 
 		# Make sure that the entries are seen as integers:
-		# tour = tour.astype('int')
+		tour = tour.astype('int')
 
 		# For the 'body' of the tour:
 		for i in range(len(tour) - 1):
@@ -1217,6 +1267,51 @@ class r0708518:
 		# 'Close' the tour:
 		fitness += self.distance_matrix[tour[-1], tour[0]]
 		return int(round(fitness))
+
+	def difference_fitness(self, old, new):
+		"""Computes the difference in fitness value between two genomes as efficiently as possible."""
+
+		old = old.astype('int')
+		new = new.astype('int')
+
+		# Initialize difference variable:
+		difference = 0
+
+		# Get the indices where the difference in the two genomes is
+		ind = np.where(old != new)[0]
+		# print("Number of diff ind in diff fitness: ", len(ind))
+
+		if len(ind) == 0:
+			return 0
+
+		# Go over these indices:
+		for i in range(len(ind)):
+			# If i = 0, take the first and get the connection before it
+			if i == 0:
+				difference -= self.distance_matrix[old[ind[0] - 1], old[ind[0]]]
+				difference += self.distance_matrix[new[ind[0] - 1], new[ind[0]]]
+			# For all other indices, check if:
+			# (1) we simply "continue" the subtour
+			elif ind[i] == ind[i-1] + 1:
+				difference -= self.distance_matrix[old[ind[i] - 1], old[ind[i]]]
+				difference += self.distance_matrix[new[ind[i] - 1], new[ind[i]]]
+			# (2) there was a "jump" in the indices:
+			else:
+				# make sure to 'close' the previous subtour
+				difference -= self.distance_matrix[old[ind[i - 1]], old[ind[i - 1] + 1]]
+				difference += self.distance_matrix[new[ind[i - 1]], new[ind[i - 1] + 1]]
+				# and start on the new one:
+				difference -= self.distance_matrix[old[ind[i] - 1], old[ind[i]]]
+				difference += self.distance_matrix[new[ind[i] - 1], new[ind[i]]]
+
+		# At the end of the for loop, we still need to close the very final subtour:
+		difference -= self.distance_matrix[old[ind[-1]], old[(ind[-1] + 1) % self.n]]
+		difference += self.distance_matrix[new[ind[-1]], new[(ind[-1] + 1) % self.n]]
+
+		return difference
+
+
+
 
 
 def analyze_operators():
@@ -1243,10 +1338,10 @@ def analyze_operators():
 
 
 if __name__ == "__main__":
-	params_dict = {"number_of_iterations": 1000, "random_perm_init_number": 0, "random_road_init_number": 100,
-				   "greedy_road_init_number": 0, "nnb_road_init_number": 0, "use_lso": False}
+	params_dict = {"number_of_iterations": 500, "random_perm_init_number": 0, "random_road_init_number": 80,
+				   "greedy_road_init_number": 0, "nnb_road_init_number": 20, "use_lso": False, "lso_cooldown": 500}
 	mytest = r0708518(params_dict)
 
-	mytest.optimize('./tour100.csv')
+	mytest.optimize('./tour50.csv')
 
 	pass
