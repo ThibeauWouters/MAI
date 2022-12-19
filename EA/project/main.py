@@ -6,7 +6,7 @@ import random
 import matplotlib.pyplot as plt
 import time
 import sys
-# from math import ceil
+from numba import njit, jit
 sys.setrecursionlimit(10000)
 
 # Fix random seeds:
@@ -23,74 +23,87 @@ def check_subset_numpy_arrays(a, b):
 	return np.size(c) == np.size(b)
 
 
-def make_diversity_plot(diversities, filename, cooldown):
-	# --- Plot the diversity observed during the run
-	# TODO - delete this at the end
-	plt.figure(figsize=(7, 5))
-	start = len(diversities) // 10
-	remainder = diversities[start:]
-	xt = [start + i*cooldown for i in range(len(remainder))]
-	plt.plot(xt, remainder, '--o', ms=4, color='red')
-	plt.axhline(0, color='black')
-	# TODO - also save the threshold value for diversity promotion here
-	# plt.axhline(0, color='black')
-	plt.axhline(1, color='black')
-	plt.grid()
-	plt.xlabel('Iteration step')
-	plt.ylabel('Average Hamming distance (sampled)')
-	plt.title('Diversity during algorithm for ' + str(filename))
-	# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
-	plot_name = "plot_diversities"
-	# Save the plots (as PNG and PDF)
-	plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
-	plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
-	plt.close()
-
-def make_fitness_plot(mean_fit_values, best_fit_values, filename):
-	# --- Plot the results
-	# TODO - delete this at the end
-	plt.figure(figsize=(7, 5))
-	start = len(mean_fit_values) // 10
-	plt.plot([i for i in range(start, len(mean_fit_values))], mean_fit_values[start:], '--o', ms=2, color='red',
-			 label="Mean")
-	plt.plot([i for i in range(start, len(best_fit_values))], best_fit_values[start:], '--o', ms=2, color='blue',
-			 label="Best")
-	plt.legend()
-	plt.grid()
-	plt.xlabel('Iteration step')
-	plt.ylabel('Fitness')
-	# plt.yscale('log')
-	plt.title('TSP for ' + str(filename))
-	# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
-	plot_name = "plot_test_run"
-	# Save the plots (as PNG and PDF)
-	plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
-	plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
-	plt.close()
-
-
 class r0708518:
 
 	def __init__(self, user_params_dict=None):
 		self.reporter = Reporter.Reporter(self.__class__.__name__)
+
+		# --- BASIC ---
+		self.lambdaa = 100
+		self.mu      = 50
 		self.distance_matrix = None
 
-		# Store default parameter values here
-		self.default_params_dict = {'lambdaa': 100, 'mu': 50, "which_mutation": "DM", "which_recombination": "OX2",
-							   "which_elimination": "lambda plus mu", "which_selection": "k tournament",
-								"tournament_size": 5, "number_of_iterations": 100,
-							   "round_robin_size": 10, "random_perm_init_number": 0, "random_road_init_number": 50,
-							   "greedy_road_init_number": 40, "nnb_road_init_number": 10, "which_lso": "2-opt",
-							   "lso_pivot_rule": "greedy descent", "lso_init_sample_size": 100, "lso_init_depth": 0,
-							   "lso_rec_sample_size": 10, "lso_rec_depth": 0, "lso_mut_sample_size": 10,
-							    "lso_mut_depth": 0, "lso_elim_sample_size": 10, "lso_elim_depth": 1, "use_lso": False,
-								"alpha": 1, "delta": -0.1, "which_metric": "Hamming", "diversity_check_cooldown": 5,
-								"lso_cooldown": 500}
+		# --- OPERATORS ---
+		self.which_mutation      = "DM"
+		self.which_recombination = "OX2"
+		self.which_elimination   = "lambda plus mu"
+		self.which_selection     = "k tournament"
+		# Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
+		# selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
+		# Note: "CX", "EX", "GROUP" crossovers are not used as they are inefficient!
+		self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
+		self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "AX"]
+		self.implemented_selection_operators     = ["k tournament"]
+		self.implemented_elimination_operators   = ["lambda plus mu", "lambda and mu", "round robin", "crowding",
+												  "k tournament"]
+		# Hyperparameters for these operators:
+		self.tournament_size  = 5
+		self.alpha            = 1
+		self.round_robin_size = 10
 
-		# TODO - declare all fields with explanation?
+		# --- INITIALIZATION ---
+		self.random_perm_init_fraction = 0
+		self.greedy_road_init_fraction = 0.5
+		self.nnb_road_init_fraction    = 0.1
 
-		# TODO - check constraints, is the sum of init numbers equal to lambda? What if it's too large/small?
+		# --- LSO ---
+		self.which_lso      = "2-opt"
+		self.lso_pivot_rule = "greedy descent"
+		# LSO hyperparameters
+		self.lso_init_sample_size = 100
+		self.lso_init_depth       = 5
+		self.lso_rec_sample_size  = 100
+		self.lso_rec_depth        = 5
+		self.lso_mut_sample_size  = 100
+		self.lso_mut_depth        = 5
+		self.lso_elim_sample_size = 100
+		self.lso_elim_depth       = 5
+		self.lso_cooldown         = 20
+		self.use_lso = False
 
+		# --- STOPPING CONDITIONS ---
+		self.number_of_iterations = 9999999999999999
+		self.delta = 0.1
+		self.no_improvement_max               = 1000
+		self.final_stage                      = False
+		self.final_stage_number_of_iterations = 500
+		self.final_stage_entered              = 0
+		self.final_stage_timer                = 120
+
+		# --- DIVERSITY PROMOTION
+		self.which_metric = "Hamming"
+		# Metrics to measure distances between individuals
+		self.implemented_metrics = ["Hamming"]
+		self.diversity_check_cooldown = 5
+		self.diversity_threshold = 0.05
+		self.tournament_size_elimination = 15
+		self.crowding_method = "lambda plus mu"
+
+		# --- OTHER ---
+		# TODO - delete "geom"?
+		# Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
+		self.implemented_probability_distributions = ["geom"]
+
+		# Save these default parameters into a dictionary to look them up later on
+		self.default_params_dict = {}
+		for attribute, value in self.__dict__.items():
+			if attribute == "default_params_dict":
+				continue
+			self.default_params_dict[attribute] = value
+			# print(attribute, value)
+
+
+		# TODO - explanation!
 		# Set the default (hyper)parameters
 		for key in self.default_params_dict.keys():
 			setattr(self, key, self.default_params_dict[key])
@@ -98,35 +111,44 @@ class r0708518:
 		if user_params_dict is not None:
 			for key in user_params_dict:
 				setattr(self, key, user_params_dict[key])
-		self.iterationCounter = 0
-		self.no_improvement_max = 500
-		# TODO - remove the following?
-		# Delta is the threshold for improvement between consecutive iterations (check convergence)
-		# self.delta = 0.1
-		# Alpha is the mutation rate we start off with, but gets adapted
-		# self.alpha = 1
 
-		# Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
-		# selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
-		self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
-		self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "CX", "EX", "AX", "GROUP"]
-		self.implemented_selection_operators     = ["k tournament"]
-		self.implemented_elimination_operators   = ["lambda plus mu", "lambda and mu", "round robin"]
-
-		# Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
-		self.implemented_probability_distributions = ["geom"]
-
-		# Metrics to measure distances between individuals
-		self.implemented_metrics = ["Hamming"]
+		# Convert fractions for the initialization to actual numbers:
+		print("Population size: %d, offspring size: %d" %(self.lambdaa, self.mu))
+		total_so_far = 0
+		self.random_perm_init_number = int(round(self.random_perm_init_fraction * self.lambdaa))
+		print("Initialized with %d random permutations." % self.random_perm_init_number)
+		total_so_far += self.random_perm_init_number
+		self.greedy_road_init_number = int(round(self.greedy_road_init_fraction * self.lambdaa))
+		print("Initialized with %d greedy roads taken." % self.greedy_road_init_number)
+		total_so_far += self.greedy_road_init_number
+		self.nnb_road_init_number = int(round(self.nnb_road_init_fraction * self.lambdaa))
+		print("Initialized with %d nearest neighbours." % self.nnb_road_init_number)
+		total_so_far += self.nnb_road_init_number
+		# Fill the remainder with "default" choice:
+		self.random_road_init_number = int(round(self.lambdaa - total_so_far))
+		print("Initialized with %d random roads taken." % self.random_road_init_number)
 
 		# For testing: print the chosen operators etc, and check if they are implemented, otherwise select a default
 		# TODO - make sure the defaults are implemented correctly and conveniently?
 
 		# Show which implementations were chosen by the user:
+		print("------------------------------------")
 		print("Mutation operator:      %s" % self.which_mutation)
 		print("Recombination operator: %s" % self.which_recombination)
 		print("Elimination operator:   %s" % self.which_elimination)
 		print("Selection operator:     %s" % self.which_selection)
+
+		if self.which_recombination == "variable":
+			self.available_rec_operators = ["PMX", "SCX", "OX2"]
+			print("Available recombination operators are: ", self.available_rec_operators)
+			self.recombination_probabilities = 1 / len(self.available_rec_operators) * np.ones(
+				len(self.available_rec_operators))
+
+		if self.which_mutation == "variable":
+			self.available_mut_operators = ["DM", "SDM", "IVM"]
+			print("Available mutation operators      are: ", self.available_mut_operators)
+			self.mutation_probabilities = 1 / len(self.available_mut_operators) * np.ones(
+				len(self.available_mut_operators))
 
 		# TODO - allow for more general or check if condition is valid?
 		if self.which_elimination == "lambda and mu":
@@ -138,6 +160,7 @@ class r0708518:
 	def optimize(self, filename):
 		"""The evolutionary algorithm's main loop"""
 		start = time.time()
+		timeLeft = 300
 		# Create empty lists to be filled with values to report progress
 		mean_fit_values = []
 		best_fit_values = []
@@ -170,23 +193,6 @@ class r0708518:
 		# Also construct the connections matrix
 		self.construct_connections_matrix()
 
-		# If LSO uses 2-opt, then generate all (i, j) pairs: this also determines the size of the neighbourhood
-		# TODO - 2-opt without constructing this list as it's likely too expensive memory-wise for the larger problems?
-		# if self.which_lso == "2-opt":
-		# 	self.two_opt_ij_pairs = np.array(
-		# 		[np.array([i, j]) for i in range(1, self.n - 1) for j in range(i + 1, self.n)])
-
-		# Make sure that the number of nb we want to sample does not exceed the size of the nb hood
-		# self.lso_init_sample_size = max(self.lso_init_sample_size, len(self.two_opt_ij_pairs))
-		# self.lso_rec_sample_size = max(self.lso_rec_sample_size, len(self.two_opt_ij_pairs))
-		# self.lso_mut_sample_size = max(self.lso_mut_sample_size, len(self.two_opt_ij_pairs))
-
-		# If we do steepest descent, this sample size is the nb size
-		# if self.lso_pivot_rule == "steepest descent":
-		# 	self.lso_init_sample_size = len(self.two_opt_ij_pairs)
-		# 	self.lso_rec_sample_size = len(self.two_opt_ij_pairs)
-		# 	self.lso_mut_sample_size = len(self.two_opt_ij_pairs)
-
 		# Allocate memory for population and offspring
 		self.population = np.empty((self.lambdaa, self.n + 1), dtype='int')
 		self.offspring = np.empty((self.mu, self.n + 1), dtype='int')
@@ -202,9 +208,21 @@ class r0708518:
 		previous_best = 0
 
 		"""This is where the main evolutionary algorithm loop comes:"""
-		while global_counter < self.number_of_iterations and no_improvement_counter < self.no_improvement_max:
+		while global_counter < self.number_of_iterations:
 			# Adapt hyperparameters:
-			alpha = self.alpha ** (global_counter)
+			# alpha = self.alpha ** (global_counter)
+			alpha = self.alpha
+
+			# To keep track of variable probabilities for crossover and mutation (if desired)
+			if self.which_recombination == "variable":
+				delta_f_crossover = [[] for i in range(len(self.available_rec_operators))]
+			if self.which_mutation == "variable":
+				delta_f_mutation = [[] for i in range(len(self.available_mut_operators))]
+
+			# Vary the parameter for the probability distributions, p, based on a predefined scheme
+			param = ((0.9 - 0.3) / 120) * (300 - timeLeft) + 0.3
+			self.variable_operator_p = min(0.9, param)
+			# print("Param : ", self.variable_operator_p)
 
 			# Old best fitness value is previous 'current' one
 			previous_best = current_best
@@ -231,21 +249,46 @@ class r0708518:
 			mean_fit_values.append(mean_objective)
 			best_fit_values.append(best_objective)
 
-			# Keep track of diversity: (with certain cooldown)
-			if global_counter % self.diversity_check_cooldown == 0:
-				diversities.append(self.measure_diversity())
+			# Keep track of diversity: (with certain cooldown, and if we're not in the final stage)
+			if global_counter % self.diversity_check_cooldown == 0 and not self.final_stage:
+				current_diversity = self.measure_diversity()
+				diversities.append(current_diversity)
+
+				# Check whether or not we want to promote diversity (in elimination phase)
+				if current_diversity < self.diversity_threshold:
+					# print("Diversity promotion! Counter %d" % global_counter)
+					self.which_elimination = "crowding"
+
+				else:
+					self.which_elimination = self.default_params_dict["which_elimination"]
 
 			# Generate new offspring
 			for i in range(self.mu):
 				parent1, parent2 = self.parents_selection()
-				# TODO - is there a redundant fitness calculation here?
 				parent_fitness = parent1[-1]
 				# Note: recombination and mutation ONLY work with genome, NOT the fitness at the end
 				# here, "child" has no fitness at the end and is only refering to the genome!
-				child = self.recombination(parent1[:-1], parent2[:-1])
+				if self.which_recombination == "variable":
+					# If we are using a variable crossover operator, we also return the index of used operator
+					index, child = self.recombination(parent1[:-1], parent2[:-1])
+					# Save info about this recombination in the appropriate list
+					difference = self.difference_fitness(parent1[:-1], child)
+					delta_f_crossover[index] = np.append(delta_f_crossover[index], difference)
+				else:
+					child = self.recombination(parent1[:-1], parent2[:-1])
+				# Perform LSO if wanted
 				child = self.lso(child, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
 				if random.uniform(0, 1) <= alpha:
-					child = self.mutation(child)
+					if self.which_mutation == "variable":
+						# If we are using a variable mutation operator, we also return the index of used operator
+						index, new_child = self.mutation(child)
+						# Save info about this recombination in the appropriate list
+						difference = self.difference_fitness(child, new_child)
+						child = new_child
+						delta_f_mutation[index] = np.append(delta_f_mutation[index], difference)
+					else:
+						child = self.mutation(child)
+					# Perform LSO if wanted
 					child = self.lso(child, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
 				# Now, compute the fitness and append it to save into offspring array
 				# TODO - delete this test
@@ -255,7 +298,7 @@ class r0708518:
 				# print("The fit value of child with diff: %d" % child_fitness)
 				# Old method
 				old_method = self.fitness(child)
-				if abs(old_method - child_fitness) > 2:
+				if abs(old_method - child_fitness) > 4:
 					print("Old: ", old_method)
 					print("Diff: ", child_fitness)
 					print("Bug in difference method")
@@ -267,10 +310,18 @@ class r0708518:
 			# Do LSO (if enabled) before the elimination phase
 			# on population:
 			for i in range(len(self.population)):
-				self.population[i] = self.lso(self.population[i], depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				old, old_fitness = self.population[i][:-1], self.population[i][-1]
+				better_individual = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				better_individual = np.append(better_individual,
+											  self.efficient_fitness(better_individual, old, old_fitness))
+				self.population[i] = better_individual
 			# on offspring:
 			for i in range(len(self.offspring)):
-				self.offspring[i] = self.lso(self.offspring[i], depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				old, old_fitness = self.offspring[i][:-1], self.offspring[i][-1]
+				better_individual = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				better_individual = np.append(better_individual,
+											  self.efficient_fitness(better_individual, old, old_fitness))
+				self.offspring[i] = better_individual
 			# Elimination phase
 			self.elimination()
 
@@ -281,14 +332,28 @@ class r0708518:
 			else:
 				self.use_lso = False
 
-			# self.iterationCounter += 1
+			# If we are using variable crossover/mutation, update their probabilities
+			if self.which_recombination == "variable":
+				average_improvements = np.array([np.mean(deltas) for deltas in delta_f_crossover])
+				# print(delta_f_crossover)
+				# print(average_improvements)
+				sort_indices = np.argsort(average_improvements)
+				values = np.ones(len(self.available_rec_operators))
+				probabilities = self.get_probabilities(values, param=self.variable_operator_p)
+				self.recombination_probabilities = probabilities[sort_indices]
+				# print("Sorted:")
+				# print(self.recombination_probabilities)
 
-			# TODO - what are some clever LSO activation rules?
-			### Check if we should activate the LSO
-			# if global_counter >= 0.99*self.number_of_iterations and self.use_lso == False:
-			# 	print("Before activating LSO: best %f" % best_objective)
-			# 	print("Before activating LSO: avrg %f" % mean_objective)
-			# 	self.use_lso = True
+			if self.which_mutation == "variable":
+				average_improvements = np.array([np.mean(deltas) for deltas in delta_f_mutation])
+				# print(delta_f_crossover)
+				# print(average_improvements)
+				sort_indices = np.argsort(average_improvements)
+				values = np.ones(len(self.available_mut_operators))
+				probabilities = self.get_probabilities(values, param=self.variable_operator_p)
+				self.mutation_probabilities = probabilities[sort_indices]
+				# print("Sorted:")
+				# print(self.recombination_probabilities)
 
 			# Call the reporter with:
 			#  - the mean objective function value of the population
@@ -296,6 +361,24 @@ class r0708518:
 			#  - a 1D numpy array in the cycle notation containing the best solution
 			#    with city numbering starting from 0
 			timeLeft = self.reporter.report(mean_objective, best_objective, best_solution)
+
+			# Check if there was no significant improvement for the final X amount of iterations or almost finished:
+			if (no_improvement_counter >= self.no_improvement_max or timeLeft < self.final_stage_timer) and not self.final_stage:
+				no_improvement_counter = 0
+				self.no_improvement_max = 999999999999999999999
+				self.final_stage_entered = global_counter
+				print("------------------------------------")
+				print("Entering final stage of this run...")
+				self.number_of_iterations = global_counter + self.final_stage_number_of_iterations
+				print("Going to run for another %d iterations or until time finished (%d seconds)" % (
+				self.final_stage_number_of_iterations, timeLeft))
+				self.final_stage = True
+				self.alpha = 0.01
+				self.use_lso = True
+				self.lso_cooldown = 2
+				self.lso_elim_depth = 5
+
+			# Our code gets killed if time is up!
 			if timeLeft < 0:
 				break
 
@@ -305,6 +388,7 @@ class r0708518:
 		time_diff = end - start
 		number_of_minutes = time_diff // 60
 		number_of_seconds = time_diff % 60
+		print("------------------------------------")
 		print(
 			f"The algorithm took {number_of_minutes} m {round(number_of_seconds)} s and {global_counter} iterations.")
 		print("The final best    fitness value was {:,}".format(round(best_objective)).replace(',', ' '))
@@ -315,8 +399,8 @@ class r0708518:
 		# print(f"All different? {all_different}")
 
 		# For our own purpose, make a plot as well:
-		make_fitness_plot(mean_fit_values, best_fit_values, filename)
-		make_diversity_plot(diversities, filename, self.diversity_check_cooldown)
+		self.make_fitness_plot(mean_fit_values, best_fit_values, filename)
+		self.make_diversity_plot(diversities, filename)
 
 		# Plot diversity
 
@@ -329,6 +413,7 @@ class r0708518:
 	# --- INITIALIZATION --- #
 	##########################
 
+	@jit(forceobj=True)
 	def initialize(self):
 		"""Initializes the population using several techniques and concatenates them."""
 
@@ -383,7 +468,7 @@ class r0708518:
 
 		self.connections_matrix = connections_matrix
 
-	def get_probabilities(self, values, distr="geom"):
+	def get_probabilities(self, values, distr="geom", param=0.4):
 		"""Generates a numpy array of probabilities to select the entries of that numpy array.
 			values: numpy array containing the values for which we want to get probabilities
 			distr: string indiciating which distribution should be used for getting the probabilities. Default is
@@ -396,12 +481,10 @@ class r0708518:
 
 		# Geometric distribution:
 		if distr == "geom":
-			# Set the probability of success on each trial (p)
-			p = 0.4
 			# Set the number of failures before the first success (k)
 			k = np.array([i for i in range(len(values))])
 			# Calculate the probabilities for each value of k using the geometric probability distribution
-			probabilities = p * (1 - p) ** (k - 1)
+			probabilities = param * (1 - param) ** (k - 1)
 			return probabilities / np.sum(probabilities)
 
 	def construct_tour(self, current, final_index, final_city, method="random"):
@@ -513,10 +596,10 @@ class r0708518:
 				# Compute its fitness and return it
 				# print("Individual constructed:")
 				# print(individual)
-				fit = self.fitness(individual)
-				individual = np.append(individual, fit)
 				# Improve individual with LSO operator (nothing changed if lso_init_depth = 0)
 				individual = self.lso(individual, depth=self.lso_init_depth)
+				fit = self.fitness(individual)
+				individual = np.append(individual, fit)
 				result[counter] = individual
 				counter += 1
 			else:
@@ -610,6 +693,11 @@ class r0708518:
 	def recombination(self, parent1, parent2):
 		"""Performs the chosen recombination operator."""
 
+		# Special case: variable operator:
+		if self.which_recombination == "variable":
+			return self.variable_crossover(parent1, parent2)
+
+		# Other cases: one single operator used all the time:
 		# Make sure the given option is implemented, otherwise use default
 		if self.which_recombination not in self.implemented_recombination_operators:
 			default = self.default_params_dict["which_recombination"]
@@ -624,19 +712,46 @@ class r0708518:
 			return self.order_crossover(parent1, parent2)
 		elif self.which_recombination == "OX2":
 			return self.order_based_crossover(parent1, parent2)
-		elif self.which_recombination == "CX":
-			return self.cycle_crossover(parent1, parent2)
-		elif self.which_recombination == "EX":
-			return self.edge_crossover(parent1, parent2)
 		elif self.which_recombination == "AX":
 			return self.alternating_crossover(parent1, parent2)
-		elif self.which_recombination == "GROUP":
-			return self.group_recombination(parent1, parent2)
 
-		# Default choice
+		# Deprecated functions
+		# elif self.which_recombination == "CX":
+		# 	return self.cycle_crossover(parent1, parent2)
+		# elif self.which_recombination == "EX":
+		# 	return self.edge_crossover(parent1, parent2)
+		# elif self.which_recombination == "GROUP":
+		# 	return self.group_recombination(parent1, parent2)
+
+		# Default choice: OX2
 		else:
-			return self.partially_mapped_crossover(parent1, parent2)
+			return self.order_based_crossover(parent1, parent2)
 
+	def variable_crossover(self, parent1, parent2):
+		"""Chooses a crossover operator at random, but taking into account their performance.
+			Watch out: returns the index together with child!"""
+		# Flip a coin, take into account fitness improvements for this
+		i = np.random.choice(len(self.available_rec_operators), p=self.recombination_probabilities)
+		# Get the chosen operator from this
+		chosen_operator = self.available_rec_operators[i]
+
+		# Do the crossover (generate child) and return also the index.
+		if chosen_operator == "PMX":
+			return i, self.partially_mapped_crossover(parent1, parent2)
+		elif chosen_operator == "SCX":
+			return i, self.single_cycle_crossover(parent1, parent2)
+		elif chosen_operator == "OX":
+			return i, self.order_crossover(parent1, parent2)
+		elif chosen_operator == "OX2":
+			return i, self.order_based_crossover(parent1, parent2)
+		elif chosen_operator == "AX":
+			return i, self.alternating_crossover(parent1, parent2)
+
+		# Default choice (as a failsafe): OX2
+		else:
+			return 0, self.order_based_crossover(parent1, parent2)
+
+	@jit(forceobj=True)
 	def order_based_crossover(self, parent1, parent2):
 		"""(OX2) Performs the order based crossover operator."""
 
@@ -644,8 +759,9 @@ class r0708518:
 		child = np.full(len(parent1), -1)
 
 		# Generate a sample of indices of length k
-		# TODO - choose a different version? Now, k is fixed to certain ration of parent length, so close to mutation
-		k = len(parent1) // 7
+		# TODO - choose a different version? Now, k is fixed to certain ratio of parent length, so close to mutation
+		# k = len(parent1) // 7
+		k = np.random.choice(np.arange(round(0.25*self.n), round(0.75*self.n)))
 		indices = np.sort(np.random.choice([i for i in range(1, len(parent1))], size=k, replace=False))
 
 		# Get cities at those positions at parent 2, look up their indices in parent1
@@ -919,6 +1035,10 @@ class r0708518:
 	def mutation(self, individual):
 		"""Performs the chosen mutation (chosen at initialization of self)"""
 
+		# Special case: variable operator:
+		if self.which_mutation == "variable":
+			return self.variable_mutation(individual)
+
 		# Make sure the given option is implemented, otherwise use default
 		if self.which_mutation not in self.implemented_mutation_operators:
 			default = self.default_params_dict["which_mutation"]
@@ -941,6 +1061,28 @@ class r0708518:
 			return self.scrambled_displacement_mutation(individual)
 		else:
 			return self.simple_inversion_mutation(individual)
+
+	def variable_mutation(self, individual):
+
+		# Flip a coin, take into account fitness improvements for this
+		i = np.random.choice(len(self.available_mut_operators), p=self.mutation_probabilities)
+		# Get the chosen operator from this
+		chosen_operator = self.available_mut_operators[i]
+		
+		if chosen_operator == "EM":
+			return i, self.exchange_mutation(individual)
+		elif chosen_operator == "DM":
+			return i, self.displacement_mutation(individual)
+		elif chosen_operator == "SIM":
+			return i, self.simple_inversion_mutation(individual)
+		elif chosen_operator == "ISM":
+			return i, self.insertion_mutation(individual)
+		elif chosen_operator == "IVM":
+			return i, self.inversion_mutation(individual)
+		elif chosen_operator == "SM":
+			return i, self.scramble_mutation(individual)
+		elif chosen_operator == "SDM":
+			return i, self.scrambled_displacement_mutation(individual)
 
 	def scrambled_displacement_mutation(self, individual):
 		"""(SDM) Takes a random subtour and inserts it, in 'scrambled' (permuted) order, at a random place.
@@ -1014,8 +1156,9 @@ class r0708518:
 		# individual = np.append(individual, fit)
 		return individual
 
+	@jit(forceobj=True)
 	def displacement_mutation(self, individual):
-		"""Cuts a subtour of the individual, and places it in a random place"""
+		"""(DM) Cuts a subtour of the individual, and places it in a random place"""
 		# TODO - enforce certain length of subtour??? Or make sure don't return same?
 
 		# Randomly introduce two cuts in the individual
@@ -1063,17 +1206,19 @@ class r0708518:
 			self.which_selection = default
 
 		if self.which_selection == "k tournament":
-			return self.k_tournament_selection()
+			# Select two parents using k tournament
+			p1 = self.k_tournament(self.population, self.tournament_size)
+			p2 = self.k_tournament(self.population, self.tournament_size)
+			return p1, p2
 
-	def k_tournament_selection(self):
-		"""Performs k tournament selection. Returns two parents, including fitness value, to perform recombination."""
+	def k_tournament(self, individuals, k):
+		"""Performs k tournament selection. Returns winner of the tournament."""
 		# Sample competitors
-		competitors_1 = self.population[np.random.choice(self.lambdaa, self.tournament_size)]
-		competitors_2 = self.population[np.random.choice(self.lambdaa, self.tournament_size)]
-		# Sort competitors based on fitness
-		competitors_1 = competitors_1[competitors_1[:, -1].argsort()]
-		competitors_2 = competitors_2[competitors_2[:, -1].argsort()]
-		return competitors_1[0], competitors_2[0]
+		pop_size = len(individuals)
+		competitors = individuals[np.random.choice(pop_size, k, replace=False)]
+		# Sort competitors based on fitness, return best one
+		competitors = competitors[competitors[:, -1].argsort()]
+		return competitors[0]
 
 	#######################
 	# --- ELIMINATION --- #
@@ -1088,23 +1233,72 @@ class r0708518:
 			print("Elimination operator not recognized. Using default: %s" % default)
 			self.which_elimination = default
 
+		# Join original population and offspring
+		all_individuals = np.concatenate((self.population, self.offspring))
+		# Sort based on their fitness value (last column of chromosome)
+		all_individuals = all_individuals[all_individuals[:, -1].argsort()]
+
 		if self.which_elimination == "lambda plus mu":
-			self.lambda_plus_mu_elimination()
+			self.lambda_plus_mu_elimination(all_individuals)
 
 		elif self.which_elimination == "lambda and mu":
 			self.lambda_and_mu_elimination()
 
+		elif self.which_elimination == "k tournament":
+			self.k_tournament_elimination(all_individuals)
+
+		elif self.which_elimination == "crowding":
+			self.crowding(all_individuals)
+
 		elif self.which_elimination == "round robin":
-			self.round_robin_elimination()
+			self.round_robin_elimination(all_individuals)
 
-		# Default:
-		else:
-			self.lambda_plus_mu_elimination()
+	def k_tournament_elimination(self, all_individuals):
+		"""Performs k tournament to construct the offspring from the population."""
+		for i in range(self.lambdaa):
+			self.population[i] = self.k_tournament(all_individuals, self.tournament_size_elimination)
+		return
 
-	def round_robin_elimination(self):
+	def crowding(self, all_individuals, sample_size=10):
+		"""Performs crowding. Selection is based on idea of lambda plus mu"""
+
+		# self.population = np.empty((self.lambdaa, self.n + 1), dtype='int')
+		counter = 0
+		while counter < self.lambdaa:
+			# Check termination condition: if number of already selected plus remaining is lambda, then "fill spots"
+			if (len(all_individuals) + counter) == self.lambdaa:
+				self.population[counter:] = all_individuals
+				return
+			# If not: continue construction, so choose the next individual for the next round
+			if self.crowding_method == "lambda plus mu":
+				# First one in array gets selected to next round:
+				chosen = all_individuals[0]
+			else:
+				# The one chosen by k tournament proceeds
+				chosen = self.k_tournament(all_individuals, self.tournament_size_elimination)
+			# Add the chosen individual to the population under construction
+			self.population[counter] = chosen
+			# Delete it from the array
+			all_individuals = np.delete(all_individuals, 0, axis=0)
+			# Failsafe: prevent a crash if length of all individuals drops below provided sample size:
+			if len(all_individuals) < sample_size:
+				sample_size = 1
+			# Search for the one closest to chosen among remaining individuals, but sample them:
+			sampled_indices = np.random.choice(len(all_individuals), size=sample_size, replace=False)
+			sampled_individuals = all_individuals[sampled_indices]
+			# Get the closest in distance
+			distances = [self.hamming_distance(chosen, individual) for individual in sampled_individuals]
+			# Get index of the one that has closest distance...
+			best_index_distances = np.argmin(distances)
+			# ... then find the index in all_individuals that corresponded to this
+			best_index = sampled_indices[best_index_distances]
+			# Delete it from the population
+			all_individuals = np.delete(all_individuals, best_index, axis=0)
+			# Increment counter to go to next round
+			counter += 1
+
+	def round_robin_elimination(self, all_individuals):
 		"""Performs the round robin elimination."""
-		# Join original population and offspring
-		all_individuals = np.concatenate((self.population, self.offspring))
 
 		# Make an empty array to store the wins
 		wins = np.zeros(self.lambdaa + self.mu)
@@ -1128,12 +1322,9 @@ class r0708518:
 		top_indices = np.argpartition(wins, -self.lambdaa)[-self.lambdaa:]
 		self.population = all_individuals[top_indices]
 
-	def lambda_plus_mu_elimination(self):
+	def lambda_plus_mu_elimination(self, all_individuals):
 		"""Performs lambda + mu elimination"""
-		# Join original population and offspring
-		all_individuals = np.concatenate((self.population, self.offspring))
-		# Sort based on their fitness value (last column of chromosome)
-		all_individuals = all_individuals[all_individuals[:, -1].argsort()]
+
 		# Make sure population size is again lambda for next iteration
 		self.population = all_individuals[:self.lambdaa]
 
@@ -1146,8 +1337,9 @@ class r0708518:
 	# --- LOCAL SEARCH --- #
 	########################
 
+	# @jit(forceobj=True)
 	def lso(self, individual, depth=1, sample_size=10):
-		"""Performs a LSO. Individual contains genome and the fitness."""
+		"""Performs a LSO. Individual contains genome but NOT the fitness."""
 
 		# If we disabled the use of LSO, do nothing
 		if not self.use_lso:
@@ -1158,8 +1350,8 @@ class r0708518:
 			return individual
 
 		# Save initial values, ie fitness and corresponding genome, to "best"
-		best_fitness = individual[-1]
-		individual = individual[:-1]
+		# best_fitness = individual[-1]
+		# individual = individual[:-1]
 		best_individual = individual
 
 		if self.which_lso == "2-opt":
@@ -1178,18 +1370,19 @@ class r0708518:
 				# If improvement is seen, save it
 				if difference < 0:
 					# print("difference negative observed")
-					best_fitness += difference
+					# best_fitness += difference
 					best_individual = neighbour
 					# If the pivot rule is greedy descent: return at first improvement
 					if self.lso_pivot_rule == "greedy descent":
 						# Append fitness at the end of the individual
-						best_individual = np.append(best_individual, best_fitness)
+						# best_individual = np.append(best_individual, best_fitness)
 						return self.lso(best_individual, depth=depth-1, sample_size=sample_size)
 
 			# If we reach the end of the while loop, this means that the current individual was the best one
-			best_individual = np.append(best_individual, best_fitness)
+			# best_individual = np.append(best_individual, best_fitness)
 			return self.lso(best_individual, depth=depth - 1, sample_size=sample_size)
 
+	@jit(forceobj=True)
 	def two_opt(self, individual, i, j):
 		"""Applies the two-opt operator once to a single individual. That is, it takes a subtour and reverts it."""
 		# Get a subtour and reverse it
@@ -1214,9 +1407,15 @@ class r0708518:
 	def hamming_distance(self, first, second):
 		return np.sum(np.where(first != second, 1, 0))
 
+	@jit(forceobj=True)
 	def measure_diversity(self, sample_size=25):
 		"""Measures the diversity of the population"""
 
+		# Failsafe: if we have small lambda, adapt the sample size
+		if self.lambdaa < sample_size:
+			sample_size = round(self.lambdaa/2)
+
+		# Sample indices randomly, to get a sample of the population from this
 		sample_indices = np.random.choice(self.lambdaa, size=sample_size)
 		sample = self.population[sample_indices]
 
@@ -1237,22 +1436,24 @@ class r0708518:
 	# --- OTHER --- #
 	#################
 
+	@jit(forceobj=True)
 	def efficient_fitness(self, new, old=None, old_fitness=None):
 		"""Implements a more efficient version """
 		# In case we don't compare two genomes: just compute the fitness
 		if new is None:
-			return self.fitness(new)
+			return round(self.fitness(new))
 
 		# If we compare genomes, check which version is more efficient
 		else:
 			# If there is too much difference between genomes, compute fitness old way
 			if self.hamming_distance(old, new) > self.n//2:
-				return self.fitness(new)
+				return round(self.fitness(new))
 			# If there is little difference between genomes, compute by comparison
 			else:
 				difference = self.difference_fitness(old, new)
 				return round(old_fitness + difference)
 
+	@jit(forceobj=True)
 	def fitness(self, tour):
 		"""Computes the fitness value of an individual"""
 		fitness = 0
@@ -1266,8 +1467,9 @@ class r0708518:
 
 		# 'Close' the tour:
 		fitness += self.distance_matrix[tour[-1], tour[0]]
-		return int(round(fitness))
+		return round(fitness)
 
+	@jit(forceobj=True)
 	def difference_fitness(self, old, new):
 		"""Computes the difference in fitness value between two genomes as efficiently as possible."""
 
@@ -1310,7 +1512,65 @@ class r0708518:
 
 		return difference
 
+	####################
+	# --- PLOTTING --- #
+	####################
 
+	def make_diversity_plot(self, diversities, filename):
+		cooldown = self.diversity_check_cooldown
+		# --- Plot the diversity observed during the run
+		# TODO - delete this at the end
+		plt.figure(figsize=(7, 5))
+		start = len(diversities) // 10
+		remainder = diversities[start:]
+		xt = [start + i*cooldown for i in range(len(remainder))]
+		plt.plot(xt, remainder, '--o', ms=4, color='red', label="Diversity")
+		# plt.axhline(0, color='black')
+		# plt.axhline(1, color='black')
+		plt.axhline(self.diversity_threshold, ls='--', color='black', label="Threshold")
+		eps = 0.01
+		plt.ylim(0 - eps, 1 + eps)
+		plt.grid()
+		plt.legend()
+		plt.xlabel('Iteration step')
+		plt.ylabel('Average Hamming distance (sampled)')
+		plt.title('Diversity during algorithm for ' + str(filename))
+		# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
+		plot_name = "plot_diversities"
+		# Save the plots (as PNG and PDF)
+		plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
+		plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
+		plt.close()
+
+
+	def make_fitness_plot(self, mean_fit_values, best_fit_values, filename):
+		# --- Plot the results
+		# TODO - delete this at the end
+		plt.figure(figsize=(7, 5))
+		start = len(mean_fit_values) // 10
+		plt.plot([i for i in range(start, len(mean_fit_values))], mean_fit_values[start:], '--o', ms=2, color='red',
+				 label="Mean")
+		plt.plot([i for i in range(start, len(best_fit_values))], best_fit_values[start:], '--o', ms=2, color='blue',
+				 label="Best")
+		# Plot heuristic value:
+		heuristic_dict = {"tour50.csv": 66540, "tour100.csv": 103436, "tour250.csv": 405662, "tour500.csv": 78579, "tour750.csv": 134752, "tour1000.csv": 75446}
+		for k in heuristic_dict:
+			if k in filename:
+				plt.axhline(heuristic_dict[k], ls='--', color='black', alpha=0.7, label="Heuristic")
+		plt.legend()
+		if self.final_stage_entered > 0:
+			plt.axvline(self.final_stage_entered, color='black', alpha=0.7)
+		plt.grid()
+		plt.xlabel('Iteration step')
+		plt.ylabel('Fitness')
+		# plt.yscale('log')
+		plt.title('TSP for ' + str(filename))
+		# plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
+		plot_name = "plot_test_run"
+		# Save the plots (as PNG and PDF)
+		plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
+		plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
+		plt.close()
 
 
 
@@ -1322,7 +1582,7 @@ def analyze_operators():
 
 	all_mutations = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
 	# "CX" and "EX" not included --- they are too slow to outperform any combination!
-	all_recombinations = ["PMX", "SCX", "OX", "OX2", "AX", "GROUP"]
+	all_recombinations = ["PMX", "SCX", "OX", "OX2", "AX"]
 
 	for mut in all_mutations:
 		for rec in all_recombinations:
@@ -1338,10 +1598,8 @@ def analyze_operators():
 
 
 if __name__ == "__main__":
-	params_dict = {"number_of_iterations": 500, "random_perm_init_number": 0, "random_road_init_number": 80,
-				   "greedy_road_init_number": 0, "nnb_road_init_number": 20, "use_lso": False, "lso_cooldown": 500}
+	params_dict = {"which_recombination": "", "which_mutation": ""}
 	mytest = r0708518(params_dict)
-
-	mytest.optimize('./tour50.csv')
+	mytest.optimize('./tour250.csv')
 
 	pass
