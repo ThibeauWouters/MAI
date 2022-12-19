@@ -29,7 +29,7 @@ class r0708518:
 		self.reporter = Reporter.Reporter(self.__class__.__name__)
 
 		# --- BASIC ---
-		self.lambdaa = 100
+		self.lambdaa = 50
 		self.mu      = 50
 		self.distance_matrix = None
 
@@ -48,7 +48,7 @@ class r0708518:
 												  "k tournament"]
 		# Hyperparameters for these operators:
 		self.tournament_size  = 5
-		self.alpha            = 1
+		self.alpha            = 0.7
 		self.round_robin_size = 10
 
 		# --- INITIALIZATION ---
@@ -373,10 +373,10 @@ class r0708518:
 				print("Going to run for another %d iterations or until time finished (%d seconds)" % (
 				self.final_stage_number_of_iterations, timeLeft))
 				self.final_stage = True
-				self.alpha = 0.01
+				self.alpha = 0
 				self.use_lso = True
 				self.lso_cooldown = 2
-				self.lso_elim_depth = 5
+				self.lso_elim_depth += 5
 
 			# Our code gets killed if time is up!
 			if timeLeft < 0:
@@ -1574,32 +1574,11 @@ class r0708518:
 
 
 
-def analyze_operators():
-	"""Given two sets of mutation and recombination operators, run the optimization loop for each combination
-		of mutation and recombination operators and save important values to a CSV to analyze the performance."""
-	print("Analyzing the performance of operators . . . ")
-	print("------------------------")
-
-	all_mutations = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
-	# "CX" and "EX" not included --- they are too slow to outperform any combination!
-	all_recombinations = ["PMX", "SCX", "OX", "OX2", "AX"]
-
-	for mut in all_mutations:
-		for rec in all_recombinations:
-			params_dict = {"which_mutation": mut, "which_recombination": rec}
-			mytest = r0708518(params_dict)
-			bestObjective, meanObjective, iterationCounter = mytest.optimize('./tour50.csv')
-			with open('Data/Analysis_mutation_recombination.csv', 'a', newline='') as file:
-				writer = csv.writer(file)
-				# write data (Mutation, Recombination, Best, Mean, Iterations)
-				data = [mut, rec, bestObjective, meanObjective, iterationCounter]
-				writer.writerow(data)
-			print("--------------------------------")
 
 
 if __name__ == "__main__":
 	params_dict = {"which_recombination": "", "which_mutation": ""}
 	mytest = r0708518(params_dict)
-	mytest.optimize('./tour250.csv')
+	mytest.optimize('./tour50.csv')
 
 	pass
