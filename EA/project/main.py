@@ -26,11 +26,11 @@ def check_subset_numpy_arrays(a, b):
 	return np.size(c) == np.size(b)
 
 def check_unique(individual):
-	ok = (len(pd.unique(individual)) == len(individual))
+	ok = (len(pd.unique(individual.genome)) == len(individual.genome))
 	if not ok:
-		diff = len(individual) - len(pd.unique(individual))
+		diff = len(individual.genome) - len(pd.unique(individual.genome))
 		print("Not OK: difference by %d " % diff)
-		print(individual)
+		print(individual.genome)
 		exit()
 
 
@@ -40,7 +40,7 @@ def check_unique(individual):
 ########################################
 
 
-class individual:
+class CandidateSolution:
 
 	def __init__(self, genome, fitness):
 
@@ -259,12 +259,13 @@ class r0708518:
 		self.construct_connections_matrix()
 
 		# Allocate memory for population and offspring
-		self.population = np.empty((self.lambdaa, self.n + 1), dtype='int')
-		self.offspring = np.empty((self.mu, self.n + 1), dtype='int')
+		self.population = np.empty(self.lambdaa)
+		self.offspring  = np.empty(self.mu, dtype='object')
 
 		# Initialize the population, and sort based on the final column, which contains the fitness value
 		self.initialize()
-		self.population = self.population[self.population[:, -1].argsort()]
+		#self.population = self.population[self.population[:, -1].argsort()]
+		#self.sort_fitness()
 
 		# Initialize certain variables that keep track of the convergence
 		global_counter = 1
@@ -277,8 +278,7 @@ class r0708518:
 			# TODO - TESTING, remove!
 
 			for individual in self.population:
-				tour = individual[:-1]
-				check_unique(tour)
+				check_unique(individual)
 
 			# Adapt the hyperparameters:
 			self.alpha           = self.interpolate_parameter(timeLeft, self.first_alpha, self.last_alpha)
@@ -298,12 +298,14 @@ class r0708518:
 			previous_best = current_best
 
 			# For reporting progess: get mean and best values
-			# Get the mean value of the fitnesses, which is the final column of each individual
-			mean_objective = np.mean(self.population[:, -1])
-			best = self.population[self.population[:, -1].argmin()]
-			# worst = self.population[self.population[:, -1].argmax()]
-			best_objective = best[-1]
-			best_solution = best[:-1].astype('int')
+			# Get the fitness, and find mean and best ones:
+			fitnesses = [ind.fitness for ind in self.population]
+			mean_objective = np.mean(fitnesses)
+			best_index = np.argmin(fitnesses)
+			best_candidate = self.population[best_index]
+			best_solution = best_candidate.genome
+			best_objective = best_candidate.fitness
+			# best_solution = best[:-1].astype('int')
 
 			# Update the current best fitness value
 			current_best = best_objective
@@ -335,69 +337,71 @@ class r0708518:
 			# Generate new offspring
 			for i in range(self.mu):
 				parent1, parent2 = self.parents_selection()
-				parent_fitness = parent1[-1]
+				# parent_fitness = parent1[-1]
 				# Note: recombination and mutation ONLY work with genome, NOT the fitness at the end
 				# here, "child" has no fitness at the end and is only refering to the genome!
 				if self.which_recombination == "variable":
 					# If we are using a variable crossover operator, we also return the index of used operator
-					index, child = self.recombination(parent1[:-1], parent2[:-1])
+					index, child = self.recombination(parent1, parent2)
 					# Save info about this recombination in the appropriate list
-					difference = self.difference_fitness(parent1[:-1], child)
+					difference = self.difference_fitness(parent1.genome, child.genome)
 					delta_f_crossover[index] = np.append(delta_f_crossover[index], difference)
 				else:
-					child = self.recombination(parent1[:-1], parent2[:-1])
+					child = self.recombination(parent1, parent2)
 				# Perform LSO if wanted
-				child = self.lso(child, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
+				child.genome = self.lso(child.genome, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
 				if random.uniform(0, 1) <= self.alpha:
 					if self.which_mutation == "variable":
 						# If we are using a variable mutation operator, we also return the index of used operator
 						index, new_child = self.mutation(child)
 						# Save info about this recombination in the appropriate list
-						difference = self.difference_fitness(child, new_child)
+						difference = self.difference_fitness(child.genome, new_child.genome)
 						child = new_child
 						delta_f_mutation[index] = np.append(delta_f_mutation[index], difference)
 					else:
 						child = self.mutation(child)
 					# Perform LSO if wanted
-					child = self.lso(child, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
+					child.genome = self.lso(child.genome, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
 				# Now, compute the fitness and append it to save into offspring array
 				# TODO - delete this test
-				child_fitness = self.efficient_fitness(child, parent1[:-1], parent_fitness)
+				# print(parent1.fitness)
+				child.fitness = self.efficient_fitness(child.genome, parent1.genome, parent1.fitness)
 				# diff = self.difference_fitness(parent1[:-1], child)
 				# child_fitness = round(parent_fitness + diff)
 				# print("The fit value of child with diff: %d" % child_fitness)
 				# Old method
-				old_method = self.fitness(child)
-				if abs(old_method - child_fitness) > 4:
+				old_method = self.fitness(child.genome)
+				if abs(old_method - child.fitness) > 4:
 					print("Old: ", old_method)
-					print("Diff: ", child_fitness)
+					print("Diff: ", child.fitness)
 					print("Bug in difference method")
 				# print("The fit value of child with old:  %d" % child_fitness)
-				child = np.append(child, child_fitness)
+				# child = np.append(child, child_fitness)
 				self.offspring[i] = child
 
 			# TODO - Mutate the original population as well?
 			# Do LSO (if enabled) before the elimination phase
 			# on population:
 			for i in range(len(self.population)):
-				old, old_fitness = self.population[i][:-1], self.population[i][-1]
-				better_individual = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
-				better_individual = np.append(better_individual,
-											  self.efficient_fitness(better_individual, old, old_fitness))
+				old, old_fitness = self.population[i].genome, self.population[i].fitness
+				better_genome = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				better_fitness = self.efficient_fitness(better_genome, old, old_fitness)
+				better_individual = CandidateSolution(better_genome, better_fitness)
+
 				self.population[i] = better_individual
 			# on offspring:
 			for i in range(len(self.offspring)):
-				old, old_fitness = self.offspring[i][:-1], self.offspring[i][-1]
-				better_individual = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
-				better_individual = np.append(better_individual,
-											  self.efficient_fitness(better_individual, old, old_fitness))
+				old, old_fitness = self.offspring[i].genome, self.offspring[i].fitness
+				better_genome = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
+				better_fitness = self.efficient_fitness(better_genome, old, old_fitness)
+				better_individual = CandidateSolution(better_genome, better_fitness)
+
 				self.offspring[i] = better_individual
 			# Elimination phase
 			self.elimination()
 
 			global_counter += 1
 			# For testing: see advancements:
-			# print(global_counter)
 			# Activate the LSO after certain number of iterations
 			if (global_counter % self.lso_cooldown) == 0:
 				self.use_lso = True
@@ -572,8 +576,6 @@ class r0708518:
 			final_index: the index at which the final city in individual was assigned in a previous call
 			final_city: the city last assigned in the previous function call."""
 
-		# print(current)
-
 		# If the individual is finished, return it
 		if final_index == (self.n - 1):
 			return current
@@ -646,12 +648,14 @@ class r0708518:
 			return None
 
 	def road_initialize(self, number=10, method="random"):
+
+		# Check that the provided method is a valid one, otherwise resort to default
 		if method not in ["random", "greedy", "nearest nb"]:
 			print("Initialization method not recognized. Defaulting to random.")
 			method = "random"
 
 		# Generate a "subpopulation" based on how many are generated using this method
-		result = np.empty((number, self.n + 1))
+		result = []
 
 		# Construct "number" amount of individuals
 		counter = 0
@@ -662,6 +666,7 @@ class r0708518:
 			starting_point = np.random.choice(self.n)
 			individual[0] = starting_point
 			# Call construct_tour, which recursively makes a road
+			# Note: here, individual is a TSP tour
 			individual = self.construct_tour(individual, 0, starting_point, method=method)
 			if individual is not None:
 				# Make sure that the genome starts with city 0 because of our convention
@@ -671,8 +676,10 @@ class r0708518:
 				individual = self.lso(individual, depth=self.lso_init_depth, sample_size=self.lso_init_sample_size)
 				# Compute its fitness and append at the end
 				fit = self.fitness(individual)
-				individual = np.append(individual, fit)
-				result[counter] = individual
+				# individual = np.append(individual, fit)
+				# Construct a new instance of candidate solution
+				candidate = CandidateSolution(individual, fit)
+				result.append(candidate)
 				counter += 1
 			else:
 				print("I might be stuck here...")
@@ -727,9 +734,10 @@ class r0708518:
 				# Save the individual
 				# Compute its fitness and append at the end
 				fit = self.fitness(individual)
-				individual = np.append(individual, fit)
+				# individual = np.append(individual, fit)
 				# Save it in the result, and increase counter
-				result[counter] = individual
+				candidate = CandidateSolution(individual, fitness)
+				result[counter] = candidate
 				counter += 1
 
 		# We are done
@@ -741,20 +749,21 @@ class r0708518:
 			algorithm since those have a low cost."""
 		# size = np.size(self.distance_matrix[0]) #old#
 
-		result = np.empty((number, self.n + 1))
+		result = np.empty((number, self.n))
 		for i in range(number):
 			# Random permutation, but always start in 'city 0'
 			# TODO: can this be optimized?
 			# Make sure that a zero remains that the very first position:
-			individual = np.zeros(self.n + 1)
+			individual = np.zeros(self.n)
 			# Permute the remaining cities 1, ..., n:
 			random_permutation = np.random.permutation(self.n - 1) + 1
 			# Save both parts in the individual
-			individual[1:self.n] = random_permutation
+			individual = random_permutation
 			# Compute the fitness and append to individual
-			fitness = self.fitness(random_permutation)
-			individual[-1] = fitness
-			result[i] = individual
+			fit = self.fitness(random_permutation)
+			# individual = np.append(individual, fitness)
+			candidate = CandidateSolution(individual, fit)
+			result[i] = candidate
 
 		return result
 
@@ -776,27 +785,35 @@ class r0708518:
 			which = self.which_recombination
 
 		if which == "PMX":
-			return self.partially_mapped_crossover(parent1, parent2)
+			new_genome = self.partially_mapped_crossover(parent1, parent2)
 		elif which == "SCX":
-			return self.single_cycle_crossover(parent1, parent2)
+			new_genome = self.single_cycle_crossover(parent1, parent2)
 		elif which == "OX":
-			return self.order_crossover(parent1, parent2)
+			new_genome = self.order_crossover(parent1, parent2)
 		elif which == "OX2":
-			return self.order_based_crossover(parent1, parent2)
+			new_genome = self.order_based_crossover(parent1, parent2)
 		elif which == "AX":
-			return self.alternating_crossover(parent1, parent2)
+			new_genome = self.alternating_crossover(parent1, parent2)
 
 		# Deprecated functions
 		# elif self.which_recombination == "CX":
-		# 	return self.cycle_crossover(parent1, parent2)
+		# 	new_genome = self.cycle_crossover(parent1, parent2)
 		# elif self.which_recombination == "EX":
-		# 	return self.edge_crossover(parent1, parent2)
+		# 	new_genome = self.edge_crossover(parent1, parent2)
 		# elif self.which_recombination == "GROUP":
-		# 	return self.group_recombination(parent1, parent2)
+		# 	new_genome = self.group_recombination(parent1, parent2)
 
 		# Default choice: OX2
 		else:
-			return self.order_based_crossover(parent1, parent2)
+			new_genome = self.order_based_crossover(parent1, parent2)
+
+		# Instantiate new CandidateSolution object, assign fitness value 0 (compute later on)
+		child = CandidateSolution(new_genome, 0)
+
+		# TODO - crossover the hyperparams . . .
+		# ...
+
+		return child
 
 	def variable_crossover(self, parent1, parent2):
 		"""Chooses a crossover operator at random, but taking into account their performance.
@@ -826,77 +843,81 @@ class r0708518:
 	def order_based_crossover(self, parent1, parent2):
 		"""(OX2) Performs the order based crossover operator."""
 
+		tour1 = parent1.genome
+		tour2 = parent2.genome
+
 		# Initialize child with -1 everywhere
-		child = np.full(len(parent1), -1)
+		child = np.full(len(tour1), -1)
 
 		# Generate a sample of indices of length k
-		# TODO - choose a different version? Now, k is fixed to certain ratio of parent length, so close to mutation
-		# k = len(parent1) // 7
+		# TODO - choose a different version? Now, k is fixed to certain ratio of tour length, so close to mutation
+		# k = len(tour1) // 7
 		k = np.random.choice(np.arange(round(0.25*self.n), round(0.75*self.n)))
-		indices = np.sort(np.random.choice([i for i in range(1, len(parent1))], size=k, replace=False))
+		indices = np.sort(np.random.choice([i for i in range(1, len(tour1))], size=k, replace=False))
 
-		# Get cities at those positions at parent 2, look up their indices in parent1
-		cities = parent2[indices]
-		new_indices = np.in1d(parent1, cities)
+		# Get cities at those positions at tour 2, look up their indices in tour1
+		cities = tour2[indices]
+		new_indices = np.in1d(tour1, cities)
 
-		# Copy parent1 at places which are not the new indices, copy cities in preserved order at selected indices
-		child[~new_indices] = parent1[~new_indices]
+		# Copy tour1 at places which are not the new indices, copy cities in preserved order at selected indices
+		child[~new_indices] = tour1[~new_indices]
 		child[new_indices] = cities
-
-		# fit = self.fitness(child)
-		# child = np.append(child, fit)
 		return child
 
 	def alternating_crossover(self, parent1, parent2):
 		"""(AX) Performs the alternating position crossover operator."""
 
-		child = np.empty(2 * len(parent1), dtype=parent1.dtype)
-		child[0::2] = parent1
-		child[1::2] = parent2
-		child = pd.unique(child)
+		tour1 = parent1.genome
+		tour2 = parent2.genome
 
-		# fit = self.fitness(child)
-		# child = np.append(child, fit)
+		child = np.empty(2 * len(tour1), dtype=tour1.dtype)
+		child[0::2] = tour1
+		child[1::2] = tour2
+		child = pd.unique(child)
 		return child
 
+	@DeprecationWarning
 	def edge_crossover(self, parent1, parent2):
 		"""(EX) Performs the edge crossover operator."""
+
+		tour1 = parent1.genome
+		tour2 = parent2.genome
 
 		# TODO - only consider rolls in 1D
 
 		# STEP 1: construct the edge table
 
 		# Initialize the edge table
-		edge_table = [np.array([], dtype='int') for i in range(len(parent1))]
+		edge_table = [np.array([], dtype='int') for i in range(len(tour1))]
 
-		# Do numpy roll on parents to easily get the edges
-		roll_p1_left = np.roll(parent1, 1)
-		roll_p1_right = np.roll(parent1, -1)
+		# Do numpy roll on tours to easily get the edges
+		roll_p1_left = np.roll(tour1, 1)
+		roll_p1_right = np.roll(tour1, -1)
 
-		roll_p2_left = np.roll(parent2, 1)
-		roll_p2_right = np.roll(parent2, -1)
+		roll_p2_left = np.roll(tour2, 1)
+		roll_p2_right = np.roll(tour2, -1)
 
 		# TODO - can be done faster?
-		for i in range(len(parent1)):
-			# Look at edges of allele at i in parent 1
-			index = parent1[i]
+		for i in range(len(tour1)):
+			# Look at edges of allele at i in tour 1
+			index = tour1[i]
 			edge_table[index] = np.concatenate([edge_table[index], np.array([roll_p1_left[i], roll_p1_right[i]])],
 											   dtype='int')
 
-			# Same for parent2
-			index = parent2[i]
+			# Same for tour2
+			index = tour2[i]
 			edge_table[index] = np.concatenate([edge_table[index], np.array([roll_p2_left[i], roll_p2_right[i]])],
 											   dtype='int')
 
 		# STEP 2: do the loop
 
 		# First element: choose 0 to guarantee constraint is met
-		child = np.full(len(parent1), -1)
+		child = np.full(len(tour1), -1)
 		child[0] = 0
 		current_element = 0
-		unassigned = [i for i in range(1, len(parent1))]
+		unassigned = [i for i in range(1, len(tour1))]
 
-		for i in range(1, len(parent1)):
+		for i in range(1, len(tour1)):
 			# Remove all references to current element in the edge table
 			for j in range(len(edge_table)):
 				if current_element in edge_table[j]:
@@ -933,85 +954,88 @@ class r0708518:
 			# Fill in value and repeat loop
 			child[i] = current_element
 			unassigned.remove(current_element)
-
-		# fit = self.fitness(child)
-		# child = np.append(child, fit)
 		return child
 
 	def order_crossover(self, parent1, parent2):
 		"""(OX) Performs the order crossover operator."""
 
-		# Introduce two random cut points to get subtour of parent1
-		a, b = np.sort(np.random.permutation(np.arange(1, len(parent1)))[:2])
+		tour1 = parent1.genome
+		tour2 = parent2.genome
 
-		# Find the remaining cities, and use their order as given in second parent
-		ids = np.in1d(parent2, parent1[a:b])
-		remainder = parent2[~ids]
+		# Introduce two random cut points to get subtour of tour1
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour1)))[:2])
+
+		# Find the remaining cities, and use their order as given in second tour
+		ids = np.in1d(tour2, tour1[a:b])
+		remainder = tour2[~ids]
 
 		# Add these two together, and make sure 0 is first element
-		child = np.concatenate([parent1[a:b], remainder])
+		child = np.concatenate([tour1[a:b], remainder])
 		idzero = np.argwhere(child == 0)[0][0]
 		child = np.roll(child, -idzero)
-
-		# fit = self.fitness(child)
-		# child = np.append(child, fit)
 		return child
 
 	def single_cycle_crossover(self, parent1, parent2):
 		"""(SCX) Performs the cycle crossover, but only performs one such cycle."""
 
+		tour1 = parent1.genome
+		tour2 = parent2.genome
+
 		# Initialize child, make sure to start at zero
-		child = np.full(len(parent1), -1)
+		child = np.full(len(tour1), -1)
 		child[0] = 0
 
 		# Initialize information for a 'cycle'
 		index = 1
-		child[index] = parent1[index]
+		child[index] = tour1[index]
 		first_index = index
 
 		while True:
 			# Look at the allele with the same position in P2
-			allele = parent2[index]
+			allele = tour2[index]
 
 			# Go to the position with the same allele in P1
-			next_index = np.argwhere(parent1 == allele)[0][0]
+			next_index = np.argwhere(tour1 == allele)[0][0]
 
 			# Add this allele to the cycle
-			child[next_index] = parent1[next_index]
+			child[next_index] = tour1[next_index]
 
 			index = next_index
-			# In case we completed the cycle, DON'T start a next 'cycle' simply return (copy parent2)
+			# In case we completed the cycle, DON'T start a next 'cycle' simply return (copy tour2)
 			if index == first_index:
-				child = np.where(child == -1, parent2, child)
+				child = np.where(child == -1, tour2, child)
 
 				return child
 
 	def cycle_crossover(self, parent1, parent2):
 		"""(CX) Performs the cycle crossover, but only performs one such cycle."""
 
+		tour1 = parent1.genome
+		tour2 = parent2.genome
+
 		# Initialize child, make sure to start at zero
-		child = np.full(len(parent1), -1)
+		child = np.full(len(tour1), -1)
 		child[0] = 0
 
 		# Initialize information for a 'cycle'
 		index = 1
 		first_index = index
-		value_parent = parent1
-		which_value_parent = "1"
-		child[index] = value_parent[index]
+		value_tour = tour1
+		which_value_tour = "1"
+		child[index] = value_tour[index]
 
 		while True:
 			# Look at the allele with the same position in P2
-			allele = parent2[index]
+			allele = tour2[index]
 
 			# Go to the position with the same allele in P1
-			next_index = np.argwhere(parent1 == allele)[0][0]
+			next_index = np.argwhere(tour1 == allele)[0][0]
 
 			# Add this allele to the cycle
-			child[next_index] = value_parent[next_index]
+			child[next_index] = value_tour[next_index]
 
 			index = next_index
-			# In case we completed the cycle, start the next 'cycle' -- swap order of parents
+			# In case we completed the cycle, start the next 'cycle' -- swap order of tours
 			if index == first_index:
 				if -1 not in child:
 					# fit = self.fitness(child)
@@ -1021,27 +1045,30 @@ class r0708518:
 					# Start a new cycle
 					index = np.argwhere(child == -1)[0][0]
 					first_index = index
-					if which_value_parent == "1":
-						value_parent = parent2
-						which_value_parent = "2"
+					if which_value_tour == "1":
+						value_tour = tour2
+						which_value_tour = "2"
 					else:
-						value_parent = parent1
-						which_value_parent = "1"
+						value_tour = tour1
+						which_value_tour = "1"
 
 	def partially_mapped_crossover(self, parent1, parent2):
 		""" (PMX) Implements the partially mapped crossover."""
 
+		tour1 = parent1.genome
+		tour2 = parent2.genome
+
 		# Initialize two children we are going to create
-		child = np.full(len(parent1), -1)
+		child = np.full(len(tour1), -1)
 		child[0] = 0
 		# Generate cut points a and b: these are two random indices, sorted
 		# TODO - make sure that a and b differ by "enough"?
-		a, b = np.sort(np.random.permutation(np.arange(1, len(parent1)))[:2])
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour1)))[:2])
 		# print("a ", a)
 		# print("b ", b)
-		# print("Length ", len(parent1))
-		# Get the cut from the 2nd parent
-		cut = parent2[a:b]
+		# print("Length ", len(tour1))
+		# Get the cut from the 2nd tour
+		cut = tour2[a:b]
 
 		# Cross the cut
 		child[a:b] = cut
@@ -1052,55 +1079,57 @@ class r0708518:
 		# Iterate over the remaining entries
 		for i in remaining_indices:
 			# Get the value we WISH to fill in:
-			value = parent1[i]
+			value = tour1[i]
 
-			# If this element, or any we will now find, was already copied from parent 2:
+			# If this element, or any we will now find, was already copied from tour 2:
 			while value in cut:
-				# look up index of this element in parent2
-				index = np.where(parent2 == value)#[0][0]
+				# look up index of this element in tour2
+				index = np.where(tour2 == value)#[0][0]
 				# Then use the mapping cut1 <-> cut2 to get new value. Check if new value also in cut2 (while loop)
-				value = parent1[index]
+				value = tour1[index]
 				### TESTING: if we are again at the same index, we are looping forever!
 				if len(index) > 1:
 					print("Bug in PMX")
-					print("P1 ", parent1)
-					print("P2 ", parent2)
+					print("P1 ", tour1)
+					print("P2 ", tour2)
 					print("Ch ", child)
 
 				if index == i:
 					print("Bug in PMX")
-					print("P1 ", parent1)
-					print("P2 ", parent2)
+					print("P1 ", tour1)
+					print("P2 ", tour2)
 					print("Ch ", child)
 
-			# if not, just use the value of parent 1
+			# if not, just use the value of tour 1
 			child[i] = value
 
 		return child
 
+	@DeprecationWarning
 	def group_recombination(self, parent1, parent2):
 		"""Copies the intersection of two parents. Distributes the remaining cities of first parent to child after
 			permutation. First implementation of recombination algorithm."""
+
+		tour1 = parent1.genome
+		tour2 = parent2.genome
 
 		# TODO - give this the correct name!
 
 		# Child starts off with the intersection of the parents. Fill remaining with -1 (to recognize it later).
 		# Since cities start in 0, this constraint will automatically copy over to child.
-		child = np.where(parent1 == parent2, parent1, -1)
+		child = np.where(tour1 == tour2, tour1, -1)
 
 		# Get the indices of child which were not assigned yet.
 		leftover_indices = np.where(child == -1)[0]
 
-		# Get the cities that appear in one of the parents, permute them
-		# TODO does it matter WHICH parent, maybe choose the one with best fitness?
-		leftover_cities_permuted = np.random.permutation(parent1[leftover_indices])
+		# Get the cities that appear in one of the tours, permute them
+		# TODO does it matter WHICH tour, maybe choose the one with best fitness?
+		leftover_cities_permuted = np.random.permutation(tour1[leftover_indices])
 
 		# Store permuted cities in the child
 		child[leftover_indices] = leftover_cities_permuted
 
 		# Compute the fitness value and return
-		# fit = self.fitness(child)
-		# child = np.append(child, fit)
 		return child
 
 	####################
@@ -1120,21 +1149,29 @@ class r0708518:
 			which = self.which_mutation
 
 		if which == "EM":
-			return self.exchange_mutation(individual)
+			new_genome = self.exchange_mutation(individual)
 		elif which == "DM":
-			return self.displacement_mutation(individual)
+			new_genome = self.displacement_mutation(individual)
 		elif which == "SIM":
-			return self.simple_inversion_mutation(individual)
+			new_genome = self.simple_inversion_mutation(individual)
 		elif which == "ISM":
-			return self.insertion_mutation(individual)
+			new_genome = self.insertion_mutation(individual)
 		elif which == "IVM":
-			return self.inversion_mutation(individual)
+			new_genome = self.inversion_mutation(individual)
 		elif which == "SM":
-			return self.scramble_mutation(individual)
+			new_genome = self.scramble_mutation(individual)
 		elif which == "SDM":
-			return self.scrambled_displacement_mutation(individual)
+			new_genome = self.scrambled_displacement_mutation(individual)
 		else:
-			return self.simple_inversion_mutation(individual)
+			new_genome = self.simple_inversion_mutation(individual)
+
+		# Instantiate new CandidateSolution object, assign fitness value 0 (compute later on)
+		new_individual = CandidateSolution(new_genome, 0)
+
+		# TODO - crossover the hyperparams . . .
+		# ...
+
+		return new_individual
 
 	def variable_mutation(self, individual):
 
@@ -1162,109 +1199,103 @@ class r0708518:
 		"""(SDM) Takes a random subtour and inserts it, in 'scrambled' (permuted) order, at a random place.
 			Note that this extends both the scramble and displacement mutation, where the subtour gets scrambled."""
 
-		# Randomly introduce two cuts in the individual
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		subtour = individual[a:b]
-		# Delete the subtour from individual
-		individual = np.delete(individual, np.arange(a, b, 1))
-		# Insert it at a random position, but reverse the order
-		insertion_point = random.randint(1, len(individual))
-		individual = np.insert(individual, insertion_point, np.random.permutation(subtour))
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly introduce two cuts in the tour
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		subtour = tour[a:b]
+		# Delete the subtour from tour
+		tour = np.delete(tour, np.arange(a, b, 1))
+		# Insert it at a random position, but reverse the order
+		insertion_point = random.randint(1, len(tour))
+		tour = np.insert(tour, insertion_point, np.random.permutation(subtour))
+		return tour
 
 	def scramble_mutation(self, individual):
 		"""(SM) Takes a random subtour of the individual, and reverses that subtour at that location."""
 
-		# Randomly introduce two cuts in the individual, and reverse that part of individual
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		individual[a:b] = np.random.permutation(individual[a:b])
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly introduce two cuts in the tour, and reverse that part of tour
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		tour[a:b] = np.random.permutation(tour[a:b])
+		return tour
 
 	def inversion_mutation(self, individual):
 		"""(IVM) Takes a random subtour and inserts it, in reversed order, at a random place.
 			Note that this is an extension of the displacement mutation, where the subtour gets reversed."""
 
-		# Randomly introduce two cuts in the individual
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		subtour = individual[a:b]
-		# Delete the subtour from individual
-		individual = np.delete(individual, np.arange(a, b, 1))
-		# Insert it at a random position, but reverse the order
-		insertion_point = random.randint(1, len(individual))
-		individual = np.insert(individual, insertion_point, subtour[::-1])
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly introduce two cuts in the tour
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		subtour = tour[a:b]
+		# Delete the subtour from tour
+		tour = np.delete(tour, np.arange(a, b, 1))
+		# Insert it at a random position, but reverse the order
+		insertion_point = random.randint(1, len(tour))
+		tour = np.insert(tour, insertion_point, subtour[::-1])
+		return tour
 
 	def insertion_mutation(self, individual):
 		"""(ISM) Takes a random city and inserts it at a random place.
 			Note that this is a special case of displacement mutation, where the subtour has length 1."""
 
-		# Randomly take two different index positions
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		subtour = individual[a]
-		# Delete the subtour from individual
-		individual = np.delete(individual, a)
-		# Insert it at a random position
-		individual = np.insert(individual, b, subtour)
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly take two different index positions
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		subtour = tour[a]
+		# Delete the subtour from tour
+		tour = np.delete(tour, a)
+		# Insert it at a random position
+		tour = np.insert(tour, b, subtour)
+		return tour
 
 	def simple_inversion_mutation(self, individual):
 		"""(SIM) Takes a random subtour of the individual, and reverses that subtour at that location."""
 
-		# Randomly introduce two cuts in the individual, and reverse that part of individual
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		individual[a:b] = individual[a:b][::-1]
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly introduce two cuts in the tour, and reverse that part of tour
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		tour[a:b] = tour[a:b][::-1]
+		return tour
 
 	@jit(forceobj=True)
 	def displacement_mutation(self, individual):
 		"""(DM) Cuts a subtour of the individual, and places it in a random place"""
 		# TODO - enforce certain length of subtour??? Or make sure don't return same?
 
-		# Randomly introduce two cuts in the individual
-		a, b = np.sort(np.random.permutation(np.arange(1, len(individual)))[:2])
-		subtour = individual[a:b]
-		# Delete the subtour from individual
-		individual = np.delete(individual, np.arange(a, b, 1))
-		# Insert it at a random position
-		insertion_point = random.randint(1, len(individual))
-		individual = np.insert(individual, insertion_point, subtour)
+		tour = individual.genome
 
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		# Randomly introduce two cuts in the tour
+		a, b = np.sort(np.random.permutation(np.arange(1, len(tour)))[:2])
+		subtour = tour[a:b]
+		# Delete the subtour from tour
+		tour = np.delete(tour, np.arange(a, b, 1))
+		# Insert it at a random position
+		insertion_point = random.randint(1, len(tour))
+		tour = np.insert(tour, insertion_point, subtour)
+		return tour
 
 	def exchange_mutation(self, individual):
 		"""Randomly swaps two entries in the cycle."""
 
+		tour = individual.genome
+
 		# idea: https://stackoverflow.com/questions/22847410/swap-two-values-in-a-numpy-array
 		# more efficient to use numpy: See comments below this answer: https://stackoverflow.com/a/9755548/13331858
-		# old method: # random.sample(range(1, len(individual)), 2)
+		# old method: # random.sample(range(1, len(tour)), 2)
 
 		# Note: we only change from index 1: always keep index 0 equal to 0
 
 		# Get two indices at which we will do a swap
-		indices = np.random.permutation(np.arange(1, len(individual)))[:2]
+		indices = np.random.permutation(np.arange(1, len(tour)))[:2]
 
 		# Flip cities at those locations. Compute fitness and return
-		individual[indices] = individual[np.flip(indices)]
-		# fit = self.fitness(individual)
-		# individual = np.append(individual, fit)
-		return individual
+		tour[indices] = tour[np.flip(indices)]
+		return tour
 
 	#####################
 	# --- SELECTION --- #
@@ -1290,7 +1321,7 @@ class r0708518:
 			k = pop_size//2
 		competitors = individuals[np.random.choice(pop_size, k, replace=False)]
 		# Sort competitors based on fitness, return best one
-		competitors = competitors[competitors[:, -1].argsort()]
+		competitors = self.sort_fitness(competitors)
 		return competitors[0]
 
 	#######################
@@ -1303,7 +1334,8 @@ class r0708518:
 		# Join original population and offspring
 		all_individuals = np.concatenate((self.population, self.offspring))
 		# Sort based on their fitness value (last column of chromosome)
-		all_individuals = all_individuals[all_individuals[:, -1].argsort()]
+		# TODO - may not be useful to do if we are not going to base elimination on fitness???
+		all_individuals = self.sort_fitness(all_individuals)
 
 		# Specify which operator was selected
 		if which is None:
@@ -1355,7 +1387,7 @@ class r0708518:
 			sampled_indices = np.random.choice(len(all_individuals), size=sample_size, replace=False)
 			sampled_individuals = all_individuals[sampled_indices]
 			# Get the closest in distance
-			distances = [self.hamming_distance(chosen, individual) for individual in sampled_individuals]
+			distances = [self.hamming_distance(chosen.genome, individual.genome) for individual in sampled_individuals]
 			# Get index of the one that has closest distance...
 			best_index_distances = np.argmin(distances)
 			# ... then find the index in all_individuals that corresponded to this
@@ -1379,7 +1411,7 @@ class r0708518:
 				random_index = np.random.choice(self.lambdaa + self.mu)
 				competitor = all_individuals[random_index]
 				# Compare their fitness values, decide who wins
-				if current_individual[-1] < competitor[-1]:
+				if current_individual.genome < competitor.genome:
 					# Current individual wins, add +1 to his win count
 					wins[i] += 1
 				else:
@@ -1407,6 +1439,8 @@ class r0708518:
 	# @jit(forceobj=True)
 	def lso(self, individual, depth=1, sample_size=10):
 		"""Performs a LSO. Individual contains genome but NOT the fitness."""
+
+
 
 		# If we disabled the use of LSO, do nothing
 		if not self.use_lso:
@@ -1498,7 +1532,7 @@ class r0708518:
 				# Note: the distance is divided by the problem size, such that the concept of "diversity" does not
 				# depend on the problem size. This allows us to design diversity promotion techniques valid for all
 				# sizes of the TSP.
-				total_distance += (self.measure_distance(sample[i], sample[j]))/self.n
+				total_distance += (self.measure_distance(sample[i].genome, sample[j].genome))/self.n
 				counter += 1
 
 		return total_distance/counter
@@ -1507,22 +1541,31 @@ class r0708518:
 	# --- FITNESS --- #
 	###################
 
+	def sort_fitness(self, individuals):
+		"""Sorts a given group of individuals based on their fitness values"""
+		fitnesses = np.array([ind.fitness for ind in individuals], dtype='float64')
+		sort_ind = np.argsort(fitnesses)
+		return individuals[sort_ind]
+
 	@jit(forceobj=True)
 	def efficient_fitness(self, new, old=None, old_fitness=None):
-		"""Implements a more efficient version """
+		"""Implements a more efficient version of fitness calculation.
+			old, new: TSP tours.
+			old_fitness: fitness value of old tour (if provided)"""
+
 		# In case we don't compare two genomes: just compute the fitness
 		if new is None:
-			return round(self.fitness(new))
+			return self.fitness(new)
 
 		# If we compare genomes, check which version is more efficient
 		else:
 			# If there is too much difference between genomes, compute fitness old way
 			if self.hamming_distance(old, new) > self.n//2:
-				return round(self.fitness(new))
+				return self.fitness(new)
 			# If there is little difference between genomes, compute by comparison
 			else:
 				difference = self.difference_fitness(old, new)
-				return round(old_fitness + difference)
+				return old_fitness + difference
 
 	@jit(forceobj=True)
 	def fitness(self, tour):
@@ -1538,14 +1581,14 @@ class r0708518:
 
 		# 'Close' the tour:
 		fitness += self.distance_matrix[tour[-1], tour[0]]
-		return round(fitness)
+		return fitness
 
 	@jit(forceobj=True)
 	def difference_fitness(self, old, new):
 		"""Computes the difference in fitness value between two genomes as efficiently as possible."""
 
-		old = old.astype('int')
-		new = new.astype('int')
+		# old = old.astype('int')
+		# new = new.astype('int')
 
 		# Initialize difference variable:
 		difference = 0
@@ -1627,8 +1670,6 @@ class r0708518:
 		test = pd.read_csv(save_name, header=None)
 		print(test)
 
-
-
 	####################
 	# --- PLOTTING --- #
 	####################
@@ -1690,8 +1731,7 @@ class r0708518:
 
 
 if __name__ == "__main__":
-	params_dict = {"which_recombination": "random", "which_mutation": "random", "which_elimination": "k tournament",
-				   "which_lso": "adjacent swaps", "number_of_iterations": 1000}
+	params_dict = {"which_elimination": "k tournament", "number_of_iterations": 100, "use_lso": False}
 	mytest = r0708518(params_dict)
 	mytest.optimize('./tour50.csv')
 	# mytest.save_hyperparams("XXX.csv")
