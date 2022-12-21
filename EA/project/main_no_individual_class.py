@@ -39,16 +39,17 @@ def check_unique(individual):
 # --- EVOLUTIONARY ALGORITHM CLASS --- #
 ########################################
 
-
 class individual:
 
 	def __init__(self, genome, fitness):
 
-		self.fitness = fitness
 		self.genome = genome
+		self.fitness = fitness
 
+		self.hey = "please help!!!"
 
 class r0708518:
+
 
 	def __init__(self, user_params_dict=None):
 		self.reporter = Reporter.Reporter(self.__class__.__name__)
