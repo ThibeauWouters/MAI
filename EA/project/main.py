@@ -6,6 +6,8 @@ import random
 import matplotlib.pyplot as plt
 import time
 import sys
+import warnings
+from math import ceil, floor
 from numba import njit, jit
 sys.setrecursionlimit(10000)
 
@@ -13,8 +15,9 @@ sys.setrecursionlimit(10000)
 np.random.seed(0)
 random.seed(0)
 
-
-# --- Auxiliary functions ---
+###############################
+# --- AUXILIARY FUNCTIONS --- #
+###############################
 
 def check_subset_numpy_arrays(a, b):
 	"""Returns true if a is a sub array of b"""
@@ -22,14 +25,30 @@ def check_subset_numpy_arrays(a, b):
 	c = np.intersect1d(a, b)
 	return np.size(c) == np.size(b)
 
+def check_unique(individual):
+	ok = (len(pd.unique(individual)) == len(individual))
+	if not ok:
+		diff = len(individual) - len(pd.unique(individual))
+		print("Not OK: difference by %d " % diff)
+		print(individual)
+		exit()
+
+
+
+########################################
+# --- EVOLUTIONARY ALGORITHM CLASS --- #
+########################################
+
 
 class r0708518:
 
 	def __init__(self, user_params_dict=None):
 		self.reporter = Reporter.Reporter(self.__class__.__name__)
 
+		# TODO - explanation!
+
 		# --- BASIC ---
-		self.lambdaa = 50
+		self.lambdaa = 100
 		self.mu      = 50
 		self.distance_matrix = None
 
@@ -40,16 +59,26 @@ class r0708518:
 		self.which_selection     = "k tournament"
 		# Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
 		# selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
-		# Note: "CX", "EX", "GROUP" crossovers are not used as they are inefficient!
-		self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM"]
-		self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "AX"]
+		# Note: "CX", "EX", "GROUP" crossovers are not used anymore as they are inefficient!
+		self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM", "variable", "random"]
+		self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "AX", "variable", "random"]
 		self.implemented_selection_operators     = ["k tournament"]
-		self.implemented_elimination_operators   = ["lambda plus mu", "lambda and mu", "round robin", "crowding",
+		self.implemented_elimination_operators   = ["lambda plus mu", "age", "round robin", "crowding",
 												  "k tournament"]
+
+		self.first_variable_p = 0.3
+		self.last_variable_p  = 0.9
+		self.variable_p       = self.first_variable_p
+
 		# Hyperparameters for these operators:
-		self.tournament_size  = 5
-		self.alpha            = 0.7
-		self.round_robin_size = 10
+		self.first_tournament_size       = 5
+		self.last_tournament_size        = 20
+		self.tournament_size             = self.first_tournament_size
+		self.tournament_size_elimination = int(round(0.5*self.lambdaa))
+		self.first_alpha                 = 1
+		self.last_alpha                  = 0.85
+		self.alpha                       = self.first_alpha
+		self.round_robin_size            = 10
 
 		# --- INITIALIZATION ---
 		self.random_perm_init_fraction = 0
@@ -58,36 +87,36 @@ class r0708518:
 
 		# --- LSO ---
 		self.which_lso      = "2-opt"
+		self.implemented_lso = ["2-opt", "adjacent swaps"]
 		self.lso_pivot_rule = "greedy descent"
 		# LSO hyperparameters
-		self.lso_init_sample_size = 100
-		self.lso_init_depth       = 5
-		self.lso_rec_sample_size  = 100
-		self.lso_rec_depth        = 5
-		self.lso_mut_sample_size  = 100
-		self.lso_mut_depth        = 5
+		self.lso_init_sample_size = 20
+		self.lso_init_depth       = 1
+		self.lso_rec_sample_size  = 10
+		self.lso_rec_depth        = 0
+		self.lso_mut_sample_size  = 10
+		self.lso_mut_depth        = 2
 		self.lso_elim_sample_size = 100
-		self.lso_elim_depth       = 5
-		self.lso_cooldown         = 20
-		self.use_lso = False
+		self.lso_elim_depth       = 2
+		self.lso_cooldown         = 50
+		self.use_lso              = True
 
 		# --- STOPPING CONDITIONS ---
-		self.number_of_iterations = 9999999999999999
-		self.delta = 0.1
+		self.number_of_iterations             = 9999999999999999
+		self.delta                            = 0.1
 		self.no_improvement_max               = 1000
 		self.final_stage                      = False
 		self.final_stage_number_of_iterations = 500
 		self.final_stage_entered              = 0
-		self.final_stage_timer                = 120
+		self.final_stage_timer                = (2/5)*self.reporter.allowedTime
 
 		# --- DIVERSITY PROMOTION
-		self.which_metric = "Hamming"
+		self.which_metric                = "Hamming"
 		# Metrics to measure distances between individuals
-		self.implemented_metrics = ["Hamming"]
-		self.diversity_check_cooldown = 5
-		self.diversity_threshold = 0.05
-		self.tournament_size_elimination = 15
-		self.crowding_method = "lambda plus mu"
+		self.implemented_metrics         = ["Hamming"]
+		self.diversity_check_cooldown    = 5
+		self.diversity_threshold         = 0.05
+		self.crowding_method             = "lambda plus mu"
 
 		# --- OTHER ---
 		# TODO - delete "geom"?
@@ -100,19 +129,44 @@ class r0708518:
 			if attribute == "default_params_dict":
 				continue
 			self.default_params_dict[attribute] = value
-			# print(attribute, value)
+		default_param_keys = self.default_params_dict.keys()
 
-
-		# TODO - explanation!
-		# Set the default (hyper)parameters
-		for key in self.default_params_dict.keys():
-			setattr(self, key, self.default_params_dict[key])
 		# Overwrite the (hyper)parameters set by the user:
 		if user_params_dict is not None:
 			for key in user_params_dict:
-				setattr(self, key, user_params_dict[key])
+				if key not in default_param_keys:
+					print("User specified parameter %s is not a valid parameter." % str(key))
+				else:
+					setattr(self, key, user_params_dict[key])
+
+		# Make sure that the chosen operators are actually implemented, otherwise: use default one
+		if self.which_recombination not in self.implemented_recombination_operators:
+			default = self.default_params_dict["which_recombination"]
+			print("Recombination operator not recognized. Using default: %s" % default)
+			self.which_recombination = default
+
+		if self.which_mutation not in self.implemented_mutation_operators:
+			default = self.default_params_dict["which_mutation"]
+			print("Mutation operator not recognized. Using default: %s" % default)
+			self.which_mutation = default
+
+		if self.which_elimination not in self.implemented_elimination_operators:
+			default = self.default_params_dict["which_elimination"]
+			print("Elimination operator not recognized. Using default: %s" % default)
+			self.which_elimination = default
+
+		if self.which_selection not in self.implemented_selection_operators:
+			default = self.default_params_dict["which_selection"]
+			print("Selection operator not recognized. Using default: %s" % default)
+			self.which_selection = default
+
+		if self.which_lso not in self.implemented_lso:
+			default = self.default_params_dict["which_lso"]
+			print("LSO operator not recognized. Using default: %s" % default)
+			self.which_lso = default
 
 		# Convert fractions for the initialization to actual numbers:
+		print("------------------------------------")
 		print("Population size: %d, offspring size: %d" %(self.lambdaa, self.mu))
 		total_so_far = 0
 		self.random_perm_init_number = int(round(self.random_perm_init_fraction * self.lambdaa))
@@ -128,7 +182,6 @@ class r0708518:
 		self.random_road_init_number = int(round(self.lambdaa - total_so_far))
 		print("Initialized with %d random roads taken." % self.random_road_init_number)
 
-		# For testing: print the chosen operators etc, and check if they are implemented, otherwise select a default
 		# TODO - make sure the defaults are implemented correctly and conveniently?
 
 		# Show which implementations were chosen by the user:
@@ -138,21 +191,25 @@ class r0708518:
 		print("Elimination operator:   %s" % self.which_elimination)
 		print("Selection operator:     %s" % self.which_selection)
 
-		if self.which_recombination == "variable":
+		if self.which_recombination in ["variable", "random"]:
+			# These are the operators we are going to use when allowed to do multiple
 			self.available_rec_operators = ["PMX", "SCX", "OX2"]
 			print("Available recombination operators are: ", self.available_rec_operators)
+			# Start off with uniform probabilities
 			self.recombination_probabilities = 1 / len(self.available_rec_operators) * np.ones(
 				len(self.available_rec_operators))
 
-		if self.which_mutation == "variable":
+		if self.which_mutation in ["variable", "random"]:
+			# These are the operators we are going to use when allowed to do multiple
 			self.available_mut_operators = ["DM", "SDM", "IVM"]
+			# Start off with uniform probabilities
 			print("Available mutation operators      are: ", self.available_mut_operators)
 			self.mutation_probabilities = 1 / len(self.available_mut_operators) * np.ones(
 				len(self.available_mut_operators))
 
 		# TODO - allow for more general or check if condition is valid?
-		if self.which_elimination == "lambda and mu":
-			# For lambda and mu, where we replace current generation with offspring, make sure they are same size
+		if self.which_elimination == "age":
+			# For age replacement where we replace current generation with offspring, make sure they are same size
 			smallest = min(self.lambdaa, self.mu)
 			self.lambdaa = smallest
 			self.mu = smallest
@@ -160,7 +217,7 @@ class r0708518:
 	def optimize(self, filename):
 		"""The evolutionary algorithm's main loop"""
 		start = time.time()
-		timeLeft = 300
+		timeLeft = self.reporter.allowedTime
 		# Create empty lists to be filled with values to report progress
 		mean_fit_values = []
 		best_fit_values = []
@@ -202,27 +259,32 @@ class r0708518:
 		self.population = self.population[self.population[:, -1].argsort()]
 
 		# Initialize certain variables that keep track of the convergence
-		global_counter = 0
+		global_counter = 1
 		no_improvement_counter = 0
 		current_best = 0
 		previous_best = 0
 
 		"""This is where the main evolutionary algorithm loop comes:"""
 		while global_counter < self.number_of_iterations:
-			# Adapt hyperparameters:
-			# alpha = self.alpha ** (global_counter)
-			alpha = self.alpha
+			# TODO - TESTING, remove!
+
+			for individual in self.population:
+				tour = individual[:-1]
+				check_unique(tour)
+
+			# Adapt the hyperparameters:
+			self.alpha           = self.interpolate_parameter(timeLeft, self.first_alpha, self.last_alpha)
+			self.tournament_size = self.interpolate_parameter(timeLeft, self.first_tournament_size, self.last_tournament_size)
+			self.tournament_size = int(floor(self.tournament_size))
+			# Vary the parameter for the probability distributions, p, based on a predefined scheme
+			if self.which_recombination == "variable" or self.which_mutation == "variable":
+				self.variable_p = self.interpolate_parameter(timeLeft, self.first_variable_p, self.last_variable_p)
 
 			# To keep track of variable probabilities for crossover and mutation (if desired)
 			if self.which_recombination == "variable":
 				delta_f_crossover = [[] for i in range(len(self.available_rec_operators))]
 			if self.which_mutation == "variable":
 				delta_f_mutation = [[] for i in range(len(self.available_mut_operators))]
-
-			# Vary the parameter for the probability distributions, p, based on a predefined scheme
-			param = ((0.9 - 0.3) / 120) * (300 - timeLeft) + 0.3
-			self.variable_operator_p = min(0.9, param)
-			# print("Param : ", self.variable_operator_p)
 
 			# Old best fitness value is previous 'current' one
 			previous_best = current_best
@@ -278,7 +340,7 @@ class r0708518:
 					child = self.recombination(parent1[:-1], parent2[:-1])
 				# Perform LSO if wanted
 				child = self.lso(child, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
-				if random.uniform(0, 1) <= alpha:
+				if random.uniform(0, 1) <= self.alpha:
 					if self.which_mutation == "variable":
 						# If we are using a variable mutation operator, we also return the index of used operator
 						index, new_child = self.mutation(child)
@@ -326,6 +388,8 @@ class r0708518:
 			self.elimination()
 
 			global_counter += 1
+			# For testing: see advancements:
+			# print(global_counter)
 			# Activate the LSO after certain number of iterations
 			if (global_counter % self.lso_cooldown) == 0:
 				self.use_lso = True
@@ -339,7 +403,7 @@ class r0708518:
 				# print(average_improvements)
 				sort_indices = np.argsort(average_improvements)
 				values = np.ones(len(self.available_rec_operators))
-				probabilities = self.get_probabilities(values, param=self.variable_operator_p)
+				probabilities = self.get_probabilities(values, param=self.variable_p)
 				self.recombination_probabilities = probabilities[sort_indices]
 				# print("Sorted:")
 				# print(self.recombination_probabilities)
@@ -350,7 +414,7 @@ class r0708518:
 				# print(average_improvements)
 				sort_indices = np.argsort(average_improvements)
 				values = np.ones(len(self.available_mut_operators))
-				probabilities = self.get_probabilities(values, param=self.variable_operator_p)
+				probabilities = self.get_probabilities(values, param=self.variable_p)
 				self.mutation_probabilities = probabilities[sort_indices]
 				# print("Sorted:")
 				# print(self.recombination_probabilities)
@@ -375,14 +439,16 @@ class r0708518:
 				self.final_stage = True
 				self.alpha = 0
 				self.use_lso = True
-				self.lso_cooldown = 2
+				self.lso_cooldown = 3
 				self.lso_elim_depth += 5
+				self.which_elimination = "lambda plus mu"
 
 			# Our code gets killed if time is up!
 			if timeLeft < 0:
 				break
 
-		# --- Report on progress within this window
+		# --- Post processing ---
+
 		# TODO - delete this at the end
 		end = time.time()
 		time_diff = end - start
@@ -593,11 +659,9 @@ class r0708518:
 				# Make sure that the genome starts with city 0 because of our convention
 				idzero = np.argwhere(individual == 0)[0][0]
 				individual = np.roll(individual, -idzero)
-				# Compute its fitness and return it
-				# print("Individual constructed:")
-				# print(individual)
 				# Improve individual with LSO operator (nothing changed if lso_init_depth = 0)
-				individual = self.lso(individual, depth=self.lso_init_depth)
+				individual = self.lso(individual, depth=self.lso_init_depth, sample_size=self.lso_init_sample_size)
+				# Compute its fitness and append at the end
 				fit = self.fitness(individual)
 				individual = np.append(individual, fit)
 				result[counter] = individual
@@ -697,22 +761,21 @@ class r0708518:
 		if self.which_recombination == "variable":
 			return self.variable_crossover(parent1, parent2)
 
-		# Other cases: one single operator used all the time:
-		# Make sure the given option is implemented, otherwise use default
-		if self.which_recombination not in self.implemented_recombination_operators:
-			default = self.default_params_dict["which_recombination"]
-			print("Recombination operator not recognized. Using default: %s" % default)
-			self.which_recombination = default
+		# Specify which operator was selected. If random, select a random one
+		if self.which_recombination == "random":
+			which = np.random.choice(self.available_rec_operators)
+		else:
+			which = self.which_recombination
 
-		if self.which_recombination == "PMX":
+		if which == "PMX":
 			return self.partially_mapped_crossover(parent1, parent2)
-		elif self.which_recombination == "SCX":
+		elif which == "SCX":
 			return self.single_cycle_crossover(parent1, parent2)
-		elif self.which_recombination == "OX":
+		elif which == "OX":
 			return self.order_crossover(parent1, parent2)
-		elif self.which_recombination == "OX2":
+		elif which == "OX2":
 			return self.order_based_crossover(parent1, parent2)
-		elif self.which_recombination == "AX":
+		elif which == "AX":
 			return self.alternating_crossover(parent1, parent2)
 
 		# Deprecated functions
@@ -912,8 +975,7 @@ class r0708518:
 			# In case we completed the cycle, DON'T start a next 'cycle' simply return (copy parent2)
 			if index == first_index:
 				child = np.where(child == -1, parent2, child)
-				# fit = self.fitness(child)
-				# child = np.append(child, fit)
+
 				return child
 
 	def cycle_crossover(self, parent1, parent2):
@@ -962,46 +1024,51 @@ class r0708518:
 		""" (PMX) Implements the partially mapped crossover."""
 
 		# Initialize two children we are going to create
-		child1 = np.zeros_like(parent1)
-		# child2 = np.zeros_like(parent1)
-
+		child = np.full(len(parent1), -1)
+		child[0] = 0
 		# Generate cut points a and b: these are two random indices, sorted
 		# TODO - make sure that a and b differ by "enough"?
 		a, b = np.sort(np.random.permutation(np.arange(1, len(parent1)))[:2])
+		# print("a ", a)
+		# print("b ", b)
+		# print("Length ", len(parent1))
+		# Get the cut from the 2nd parent
+		cut = parent2[a:b]
 
-		# Get the cuts from the two parents
-		# NOTE: parent[a:b] gives elements parent[a], ..., parent[b-1] !!!
-		cut1 = np.array(parent1[a:b])
-		cut2 = np.array(parent2[a:b])
-
-		# Cross the cuts
-		child1[a:b] = cut2
-		# child2[a:b] = cut1
+		# Cross the cut
+		child[a:b] = cut
 
 		# Check which indices remain to be assigned
-		remaining_indices = np.where(child1 == 0)
+		remaining_indices = np.where(child == -1)[0]
 
 		# Iterate over the remaining entries
-		for i in np.nditer(remaining_indices):
-			# --- Fill child 1
+		for i in remaining_indices:
 			# Get the value we WISH to fill in:
 			value = parent1[i]
 
 			# If this element, or any we will now find, was already copied from parent 2:
-			while value in cut2:
+			while value in cut:
 				# look up index of this element in parent2
-				index = np.where(parent2 == value)
+				index = np.where(parent2 == value)#[0][0]
 				# Then use the mapping cut1 <-> cut2 to get new value. Check if new value also in cut2 (while loop)
 				value = parent1[index]
+				### TESTING: if we are again at the same index, we are looping forever!
+				if len(index) > 1:
+					print("Bug in PMX")
+					print("P1 ", parent1)
+					print("P2 ", parent2)
+					print("Ch ", child)
+
+				if index == i:
+					print("Bug in PMX")
+					print("P1 ", parent1)
+					print("P2 ", parent2)
+					print("Ch ", child)
 
 			# if not, just use the value of parent 1
-			child1[i] = value
+			child[i] = value
 
-		# print("Child ", child1)
-
-		# fit = self.fitness(child1)
-		# child1 = np.append(child1, fit)
-		return child1
+		return child
 
 	def group_recombination(self, parent1, parent2):
 		"""Copies the intersection of two parents. Distributes the remaining cities of first parent to child after
@@ -1039,25 +1106,24 @@ class r0708518:
 		if self.which_mutation == "variable":
 			return self.variable_mutation(individual)
 
-		# Make sure the given option is implemented, otherwise use default
-		if self.which_mutation not in self.implemented_mutation_operators:
-			default = self.default_params_dict["which_mutation"]
-			print("Mutation operator not recognized. Using default: %s" % default)
-			self.which_mutation = default
+		if self.which_mutation == "random":
+			which = np.random.choice(self.available_mut_operators)
+		else:
+			which = self.which_mutation
 
-		if self.which_mutation == "EM":
+		if which == "EM":
 			return self.exchange_mutation(individual)
-		elif self.which_mutation == "DM":
+		elif which == "DM":
 			return self.displacement_mutation(individual)
-		elif self.which_mutation == "SIM":
+		elif which == "SIM":
 			return self.simple_inversion_mutation(individual)
-		elif self.which_mutation == "ISM":
+		elif which == "ISM":
 			return self.insertion_mutation(individual)
-		elif self.which_mutation == "IVM":
+		elif which == "IVM":
 			return self.inversion_mutation(individual)
-		elif self.which_mutation == "SM":
+		elif which == "SM":
 			return self.scramble_mutation(individual)
-		elif self.which_mutation == "SDM":
+		elif which == "SDM":
 			return self.scrambled_displacement_mutation(individual)
 		else:
 			return self.simple_inversion_mutation(individual)
@@ -1199,11 +1265,7 @@ class r0708518:
 	# Selecting parents to generate the offspring
 
 	def parents_selection(self):
-		# Make sure the given option is implemented, otherwise use default
-		if self.which_selection not in self.implemented_selection_operators:
-			default = self.default_params_dict["which_selection"]
-			print("Selection operator not recognized. Using default: %s" % default)
-			self.which_selection = default
+		"""Selects two parents in the population. Only k tournament implemented."""
 
 		if self.which_selection == "k tournament":
 			# Select two parents using k tournament
@@ -1215,6 +1277,9 @@ class r0708518:
 		"""Performs k tournament selection. Returns winner of the tournament."""
 		# Sample competitors
 		pop_size = len(individuals)
+		# Failsafe: adapt tournament size if the number of individuals is small
+		if k >= pop_size:
+			k = pop_size//2
 		competitors = individuals[np.random.choice(pop_size, k, replace=False)]
 		# Sort competitors based on fitness, return best one
 		competitors = competitors[competitors[:, -1].argsort()]
@@ -1224,33 +1289,28 @@ class r0708518:
 	# --- ELIMINATION --- #
 	#######################
 
-	def elimination(self):
+	def elimination(self, which=None):
 		"""Choose the algorithm to perform the elimination phase"""
-
-		# Make sure the given option is implemented, otherwise use default
-		if self.which_elimination not in self.implemented_elimination_operators:
-			default = self.default_params_dict["which_elimination"]
-			print("Elimination operator not recognized. Using default: %s" % default)
-			self.which_elimination = default
 
 		# Join original population and offspring
 		all_individuals = np.concatenate((self.population, self.offspring))
 		# Sort based on their fitness value (last column of chromosome)
 		all_individuals = all_individuals[all_individuals[:, -1].argsort()]
 
-		if self.which_elimination == "lambda plus mu":
+		# Specify which operator was selected
+		if which is None:
+			which = self.which_elimination
+
+		# Perform the chosen operator:
+		if which == "lambda plus mu":
 			self.lambda_plus_mu_elimination(all_individuals)
-
-		elif self.which_elimination == "lambda and mu":
-			self.lambda_and_mu_elimination()
-
-		elif self.which_elimination == "k tournament":
+		elif which == "age":
+			self.age_elimination()
+		elif which == "k tournament":
 			self.k_tournament_elimination(all_individuals)
-
-		elif self.which_elimination == "crowding":
+		elif which == "crowding":
 			self.crowding(all_individuals)
-
-		elif self.which_elimination == "round robin":
+		elif which == "round robin":
 			self.round_robin_elimination(all_individuals)
 
 	def k_tournament_elimination(self, all_individuals):
@@ -1328,9 +1388,8 @@ class r0708518:
 		# Make sure population size is again lambda for next iteration
 		self.population = all_individuals[:self.lambdaa]
 
-	def lambda_and_mu_elimination(self):
-		"""Performs (lambda, mu) elimination. Offspring becomes new population, old population discarded."""
-		# TODO - generalize to mu larger than lambda
+	def age_elimination(self):
+		"""Performs age elimination. Offspring becomes new population, old population completely discarded."""
 		self.population = self.offspring
 
 	########################
@@ -1345,42 +1404,46 @@ class r0708518:
 		if not self.use_lso:
 			return individual
 
-		# Base case, if depth of search is zero, do nothing
-		if depth == 0:
-			return individual
-
-		# Save initial values, ie fitness and corresponding genome, to "best"
-		# best_fitness = individual[-1]
-		# individual = individual[:-1]
 		best_individual = individual
-
 		if self.which_lso == "2-opt":
-			# Randomly permute the (i, j) pairs, from which neighbours are constructed, for a specified sample size
-			# sampled_indices = np.random.choice(len(self.two_opt_ij_pairs), size=sample_size, replace=False)
-			# sampled_neighbours = self.two_opt_ij_pairs[sampled_indices]
-			# NOTE - may contain duplicates
-			sampled_indices = [np.sort(np.random.choice(self.n, size=2)) for i in range(sample_size)]
-			for (i, j) in sampled_indices:
-				# Get the next neighbour
-				neighbour = self.two_opt(individual, i, j)
-				# Compute its fitness, check if better than current best
-				# fit = self.fitness(neighbour)
-				difference = self.difference_fitness(individual, neighbour)
-				# print("difference: ", difference)
-				# If improvement is seen, save it
-				if difference < 0:
-					# print("difference negative observed")
-					# best_fitness += difference
-					best_individual = neighbour
-					# If the pivot rule is greedy descent: return at first improvement
-					if self.lso_pivot_rule == "greedy descent":
-						# Append fitness at the end of the individual
-						# best_individual = np.append(best_individual, best_fitness)
-						return self.lso(best_individual, depth=depth-1, sample_size=sample_size)
+			while depth > 0:
+				sampled_indices = [np.sort(np.random.choice(np.arange(1, self.n), size=2, replace=False)) for i in range(sample_size)]
 
-			# If we reach the end of the while loop, this means that the current individual was the best one
-			# best_individual = np.append(best_individual, best_fitness)
-			return self.lso(best_individual, depth=depth - 1, sample_size=sample_size)
+				for (i, j) in sampled_indices:
+					# Get the next neighbour, and compute the difference in fitness
+					neighbour = self.two_opt(individual, i, j)
+					difference = self.difference_fitness(individual, neighbour)
+					# If improvement is seen, save it
+					if difference < 0:
+						best_individual = neighbour
+						break
+				# At the end of for loop (either completed or broken), reduce the depth
+				depth -= 1
+			return best_individual
+
+		if self.which_lso == "adjacent swaps":
+			# Note: this has complexity order n, so check (up until) the full neighbourhood of each individual
+			while depth > 0:
+				for i in range(1, self.n - 1):
+					# Get the next neighbour, and compute the difference in fitness
+					# Do an "adjacent swap", i.e. swap entry with the next entry
+					neighbour = self.swap(individual, i, i+1)
+					difference = self.difference_fitness(individual, neighbour)
+					# If improvement is seen, save it
+					if difference < 0:
+						best_individual = neighbour
+						break
+				# At the end of for loop (either completed or broken), reduce the depth
+				depth -= 1
+			return best_individual
+
+	@jit(forceobj=True)
+	def swap(self, individual, i, j):
+		clone = np.copy(individual)
+		temp = clone[i]
+		clone[i] = clone[j]
+		clone[j] = temp
+		return clone
 
 	@jit(forceobj=True)
 	def two_opt(self, individual, i, j):
@@ -1432,9 +1495,9 @@ class r0708518:
 
 		return total_distance/counter
 
-	#################
-	# --- OTHER --- #
-	#################
+	###################
+	# --- FITNESS --- #
+	###################
 
 	@jit(forceobj=True)
 	def efficient_fitness(self, new, old=None, old_fitness=None):
@@ -1512,6 +1575,52 @@ class r0708518:
 
 		return difference
 
+	#######################
+	# --- HYPERPARAMS --- #
+	#######################
+
+	def interpolate_parameter(self, time_left, first_value, last_value):
+		"""Performs a linear interpolation between two extreme values for a parameter value"""
+		t = self.reporter.allowedTime - time_left
+		if t > self.final_stage_timer:
+			return last_value
+		else:
+			value = (last_value - first_value) / (self.reporter.allowedTime - self.final_stage_timer) * t + first_value
+			return value
+
+	def save_hyperparams(self, save_name):
+		"""Saves the tunable parameters into a CSV file"""
+
+		param_names = ['lambdaa', 'mu', 'which_mutation', 'which_recombination', 'which_elimination', 'which_selection',
+					   'tournament_size', 'alpha', 'round_robin_size', 'random_perm_init_fraction',
+					   'greedy_road_init_fraction', 'nnb_road_init_fraction', 'which_lso', 'lso_pivot_rule',
+					   'lso_init_sample_size', 'lso_init_depth', 'lso_rec_sample_size', 'lso_rec_depth',
+					   'lso_mut_sample_size', 'lso_mut_depth', 'lso_elim_sample_size', 'lso_elim_depth', 'lso_cooldown',
+					   'number_of_iterations', 'delta', 'no_improvement_max', 'final_stage_number_of_iterations',
+					   'final_stage_timer', 'which_metric', 'diversity_check_cooldown', 'diversity_threshold',
+					   'tournament_size_elimination', 'crowding_method']
+
+		param_dict = {}
+		param_vals = []
+		for key in param_names:
+			param_dict[key] = self.__getattribute__(key)
+			param_vals.append(self.__getattribute__(key))
+
+		print(param_dict)
+		save_name = "Hyperparams/" + save_name
+		if save_name[-4:] != ".csv":
+			save_name = save_name + ".csv"
+		array = [param_names, param_vals]
+		array = np.transpose(array)
+		np.savetxt(save_name, array, fmt="%s", delimiter=",")
+
+		# TODO - do we want to load hyperparams?
+		#loaded = np.loadtxt(save_name, delimiter=",", dtype="str")
+		test = pd.read_csv(save_name, header=None)
+		print(test)
+
+
+
 	####################
 	# --- PLOTTING --- #
 	####################
@@ -1541,7 +1650,6 @@ class r0708518:
 		plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
 		plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
 		plt.close()
-
 
 	def make_fitness_plot(self, mean_fit_values, best_fit_values, filename):
 		# --- Plot the results
@@ -1573,12 +1681,11 @@ class r0708518:
 		plt.close()
 
 
-
-
-
 if __name__ == "__main__":
-	params_dict = {"which_recombination": "", "which_mutation": ""}
+	params_dict = {"which_recombination": "random", "which_mutation": "random", "which_elimination": "k tournament",
+				   "which_lso": "adjacent swaps", "number_of_iterations": 1000}
 	mytest = r0708518(params_dict)
 	mytest.optimize('./tour50.csv')
+	# mytest.save_hyperparams("XXX.csv")
 
 	pass

@@ -1,0 +1,33 @@
+lambdaa,50
+mu,50
+which_mutation,DM
+which_recombination,OX2
+which_elimination,lambda plus mu
+which_selection,k tournament
+tournament_size,5
+alpha,0.7
+round_robin_size,10
+random_perm_init_fraction,0
+greedy_road_init_fraction,0.5
+nnb_road_init_fraction,0.1
+which_lso,2-opt
+lso_pivot_rule,greedy descent
+lso_init_sample_size,100
+lso_init_depth,5
+lso_rec_sample_size,100
+lso_rec_depth,5
+lso_mut_sample_size,100
+lso_mut_depth,5
+lso_elim_sample_size,100
+lso_elim_depth,5
+lso_cooldown,20
+number_of_iterations,9999999999999999
+delta,0.1
+no_improvement_max,1000
+final_stage_number_of_iterations,500
+final_stage_timer,120
+which_metric,Hamming
+diversity_check_cooldown,5
+diversity_threshold,0.05
+tournament_size_elimination,15
+crowding_method,lambda plus mu
