@@ -8,12 +8,20 @@ import time
 import sys
 from math import floor
 from numba import njit, jit
+from os import listdir
+from os.path import isfile, join
 
 sys.setrecursionlimit(10000)
+
+plt.rcParams['figure.figsize'] = (7, 4)
+plt.rcParams['font.size']      = 8
 
 # Fix random seeds:
 # np.random.seed(0)
 # random.seed(0)
+
+heuristic_dict = {"tour50": 66540, "tour100": 103436, "tour250": 405662, "tour500": 78579,
+                      "tour750": 134752, "tour1000": 75446}
 
 
 ###############################
@@ -54,9 +62,8 @@ class CandidateSolution:
 class r0708518:
 
     def __init__(self, user_params_dict=None):
+        # Get the reporter
         self.reporter = Reporter.Reporter(self.__class__.__name__)
-
-        # TODO - explanation!
 
         # --- BASIC ---
         # Size of the population
@@ -72,7 +79,7 @@ class r0708518:
         self.which_selection     = "k tournament"
         # Below, the functions that we implemented in the algorithm are saved, in order to check that the user
         # selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
-        # Note: "CX", "EX", "GROUP" crossovers are not used anymore as they are inefficient!
+        # Note: "CX", "EX", "GROUP" crossovers are not used anymore as they are inefficient compared to others!
         self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM", "variable", "random"]
         self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "AX", "variable", "random"]
         self.implemented_selection_operators     = ["k tournament"]
@@ -118,9 +125,6 @@ class r0708518:
         self.lso_init_depth       = 3
         self.lso_rec_sample_size  = 0
         self.lso_rec_depth        = 0
-        # TODO - just delete this?
-        # self.lso_mut_sample_size  = 0
-        # self.lso_mut_depth        = 0
         self.lso_elim_sample_size = 100
         self.lso_elim_depth       = 3
         # Specify to which percentage of individuals we apply the LSO before elimination takes place:
@@ -163,7 +167,7 @@ class r0708518:
         # Boolean to indicate whether we want to use crowding during elimination phase:
         self.use_crowding             = True
         # Sample size used when performing crowding
-        self.crowding_sample_size     = self.lambdaa//25 # was:3
+        self.crowding_sample_size     = self.lambdaa//25
 
         # --- PROBABILITIES ---
         # Probability distributions that one can use to select items from a numpy array (see self.get_probabilities)
@@ -174,14 +178,22 @@ class r0708518:
         self.last_p  = 0.6
         self.p       = self.first_p
 
+        # --- OTHER ---
+        # Indicate whether or not we want to make a plot of the results:
+        self.make_plot  = False
+        self.which_plot = "combined"
+
         # --- Empty fields - to be determined/stored later on ----
-        self.distance_matrix = None
+        # Matrices that we are going to read, and the penalty value we are going to give to illegal roads:
+        self.distance_matrix    = None
+        # n = number of cities in TSP problem
+        self.n                  = None
         self.connections_matrix = None
-        self.population = None
-        self.offspring = None
-        self.all_individuals = None
-        self.penalty_value = None
-        self.n = None
+        self.penalty_value      = None
+        # Population, offspring and their merger 'all_individuals'
+        self.population         = None
+        self.offspring          = None
+        self.all_individuals    = None
 
         # Save these default parameters into a dictionary to look them up later on
         self.default_params_dict = {}
@@ -499,13 +511,20 @@ class r0708518:
         print("The final best    fitness value was {:,}".format(round(best_objective)).replace(',', ' '))
         print("The final average fitness value was {:,}".format(round(mean_objective)).replace(',', ' '))
 
-        # For our own purpose, make a plot as well:
-        self.make_fitness_plot(mean_fit_values, best_fit_values, filename, chop=10)
-        # Also make a plot where we only show the best fitness during the evolution
-        self.make_fitness_plot(mean_fit_values, best_fit_values, filename, plot_mean=False, plot_name="best_fitness")
-        # Plot diversity
-        if len(diversities) > 0:
-            self.make_diversity_plot(diversities, filename)
+        if self.make_plot:
+            if self.which_plot == "separate":
+                make_fitness_plot(mean_fit_values, best_fit_values, filename, start=10,
+                                  final_stage_entered=self.final_stage_entered)
+                make_fitness_plot(mean_fit_values, best_fit_values, filename, plot_mean=False, plot_name="best_fitness",
+                                  final_stage_entered=self.final_stage_entered)
+            # By default, plot combined plot
+            else:
+                make_combined_fitness_plot(mean_fit_values, best_fit_values, filename, plot_name="test",
+                                           final_stage_entered=self.final_stage_entered)
+
+            # Plot diversity (if we measured it during the run)
+            if len(diversities) > 0:
+                self.make_diversity_plot(diversities, filename)
 
         # Return the best fitness value & best solution
         # TODO - change this again
@@ -1693,15 +1712,14 @@ class r0708518:
         loaded_values = pd.read_csv(save_name, header=None)
         print(loaded_values)
 
-    ####################
+    ###########################
     # --- POST PROCESSING --- #
-    ####################
+    ###########################
 
     def make_diversity_plot(self, diversities, filename):
         cooldown = self.diversity_check_cooldown
         # --- Plot the diversity observed during the run
         # TODO - delete this at the end
-        plt.figure(figsize=(7, 5))
         # start = len(diversities) // 20
         start = 0
         remainder = diversities[start:]
@@ -1723,43 +1741,268 @@ class r0708518:
         plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
         plt.close()
 
-    def make_fitness_plot(self, mean_fit_values, best_fit_values, filename, plot_mean=True, plot_name="plot_test_run",
-                          chop=None):
-        # --- Plot the results
-        # TODO - delete this at the end
-        plt.figure(figsize=(7, 5))
-        if chop is None:
-            start = 0
-        else:
-            start = len(mean_fit_values) // chop
-        if plot_mean:
-            plt.plot([i for i in range(start, len(mean_fit_values))], mean_fit_values[start:], '--o', ms=2, color='red',
-                     label="Mean")
-        plt.plot([i for i in range(start, len(best_fit_values))], best_fit_values[start:], '--o', ms=2, color='blue',
-                 label="Best")
-        # Plot heuristic value:
-        heuristic_dict = {"tour50.csv": 66540, "tour100.csv": 103436, "tour250.csv": 405662, "tour500.csv": 78579,
-                          "tour750.csv": 134752, "tour1000.csv": 75446}
-        for k in heuristic_dict:
-            if k in filename:
-                heuristic_value = heuristic_dict[k]
-                plt.axhline(heuristic_dict[k], ls='--', color='black', alpha=0.7, label="Heuristic")
-        plt.legend()
 
-        # Print whether or not we've beaten the heuristic value to the screen
-        beaten = (best_fit_values[-1] < heuristic_value)
-        print("Beaten the heuristic value?", beaten)
-        # Show when we killed diversity and went full for exploitation
-        plt.axvline(self.final_stage_entered, color='black', alpha=0.7)
+def make_combined_fitness_plot(mean_fit_values, best_fit_values, filename, plot_name="plot_test_run",
+                      start=0, final_stage_entered=0, seconds=None):
+
+    print("Plotting . . . ")
+    # Instantiate auxiliary variables
+    tour_name = filename
+    heuristic_value = None
+
+    # Get the heuristic value (in case it is one of the benchmark problems)
+
+    for k in heuristic_dict:
+        if k + ".csv" in filename:
+            tour_name = k
+            heuristic_value = heuristic_dict[k]
+            break
+
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True)
+
+    if seconds is None:
+        x = [i for i in range(len(mean_fit_values))]
+    else:
+        x = seconds
+
+    # --- AX1: mean AND best:
+    ax1.plot(x[start:], mean_fit_values[start:], '--o', ms=3, color='red',
+                 label="Mean")
+    start=0
+    ax1.plot(x[start:], best_fit_values[start:], '--o', ms=3, color='blue',
+             label="Best")
+    ax1.axhline(heuristic_value, ls='--', lw=1.25, alpha=0.9, color='black', label="Heuristic")
+
+    # Show when we killed diversity and went full for exploitation (in case we plot after a run)
+    if final_stage_entered > 0:
+        ax1.axvline(final_stage_entered, color='black')
+    ax1.grid()
+    ax1.legend()
+    ax1.set_ylabel('Fitness')
+    factor = 1.5
+    if tour_name == "tour1000":
+        factor = 2.5
+    ax1.set_ylim(np.min(best_fit_values[-1] - heuristic_value/7), factor*heuristic_value)
+    ax1.set_title('TSP for ' + tour_name)
+
+    # --- AX2: best fitness only
+    ax2.plot(x[start:], best_fit_values[start:], '--o', ms=3, color='blue',
+             label="Best")
+    ax2.axhline(heuristic_value, ls='--', color='black', alpha=0.9, label="Heuristic", lw=1.25)
+
+    # Show when we killed diversity and went full for exploitation (in case we plot after a run)
+    if final_stage_entered > 0:
+        ax2.axvline(final_stage_entered, color='black')
+    ax2.grid()
+    if seconds is None:
+        ax2.set_xlabel('Iteration step')
+    else:
+        ax2.set_xlabel('Time (s)')
+    ax2.set_ylabel('Fitness')
+    
+    # Save the plots (as PNG and PDF)
+    plt.savefig('Plots/' + plot_name + '_combined.png', bbox_inches='tight')
+    plt.savefig('Plots/' + plot_name + '_combined.pdf', bbox_inches='tight')
+    plt.close()
+
+
+def make_fitness_plot(mean_fit_values, best_fit_values, filename, plot_mean=True, plot_name="plot_test_run",
+                      start=10, final_stage_entered=0):
+    """Makes plots of the mean and best fitness values."""
+
+    print("Plotting . . . ")
+    # Instantiate auxiliary variables
+    tour_name = filename
+    heuristic_value = None
+
+    # We have the option either to plot the mean or not
+    if plot_mean:
+        plt.plot([i for i in range(start, len(mean_fit_values))], mean_fit_values[start:], '--o', ms=3, color='red',
+                 label="Mean")
+    plt.plot([i for i in range(start, len(best_fit_values))], best_fit_values[start:], '--o', ms=3, color='blue',
+             label="Best")
+
+    # Plot heuristic value as well:
+    for k in heuristic_dict:
+        if k + '.csv' in filename:
+            tour_name = k
+            heuristic_value = heuristic_dict[k]
+            plt.axhline(heuristic_dict[k], ls='--', color='black', alpha=0.7, label="Heuristic")
+            break
+
+    # Show when we killed diversity and went full for exploitation
+    if final_stage_entered > 0:
+        plt.axvline(final_stage_entered, color='black', alpha=0.7)
+    plt.grid()
+    plt.legend()
+    plt.xlabel('Iteration step')
+    plt.ylabel('Fitness')
+    plt.title('TSP for ' + tour_name)
+
+    # Save the plots (as PNG and PDF)
+    plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
+    plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
+    plt.close()
+
+
+def load(filename):
+    """Load a Reporter CSV file."""
+
+    # Read in the CSV file
+    data = np.genfromtxt(filename, delimiter=",")
+
+    # Save as separate fields
+    iterations, elapsed, mean, best = data[:, 0], data[:, 1], data[:, 2], data[:, 3]
+    cycles = data[:, 4:-1]
+
+    return iterations, elapsed, mean, best, cycles
+
+
+def load_and_plot(filename, save_name="test_", seconds=None):
+    """Load a Reporter CSV file and process it, plotting the fitness values."""
+
+    # Load the values
+    iterations, elapsed, mean, best, cycles = load(filename)
+
+    # Give the tour a name, based on the size of the problem:
+    name = "tour" + str(len(cycles[0])) + ".csv"
+
+    # --- Note - we only use the combined fitness plot here, and use iterations instead of seconds
+    # Plot the best and mean fitness
+    # make_fitness_plot(mean, best, name, plot_name="Project plots/" + save_name + "best_mean")
+    # Plot the best fitness only
+    # make_fitness_plot(mean, best, name, plot_name="Project plots/" + save_name + "best", plot_mean=False)
+    # Combined plot, iterations:
+    make_combined_fitness_plot(mean, best, name, plot_name="Project plots/" + save_name + "iterations")
+    # Combined plot, time in seconds:
+    # make_combined_fitness_plot(mean, best, name, plot_name="Project plots/" + save_name + "seconds", seconds=elapsed)
+
+    # print("Best value for this run was %0.2f" % best[-1])
+
+
+def analyze_runs(which_tour="tour50"):
+    """Loads in all runs performed for a tour, and analyzes them."""
+
+    # Get the relevant Reporter CSV files
+    folder_name = "./Runs/" + which_tour + "/"
+    all_filenames = [(folder_name + f) for f in listdir(folder_name) if isfile(join(folder_name, f))]
+
+    # Get the heuristic value (in case it is one of the benchmark problems)
+    heuristic_dict = {"tour50": 66540, "tour100": 103436, "tour250": 405662, "tour500": 78579,
+                      "tour750": 134752, "tour1000": 75446}
+    for k in heuristic_dict:
+        if k == which_tour:
+            heuristic_value = heuristic_dict[k]
+            break
+
+    number_of_runs = len(all_filenames)
+    n = int(which_tour[4:])
+    print("We have %d runs of %s" % (number_of_runs, which_tour))
+
+    # Get empty lists ready to be filled:
+    all_iterations = np.zeros(len(all_filenames))
+    all_elapsed    = np.zeros(len(all_filenames))
+    all_best       = np.zeros(len(all_filenames))
+    all_mean       = np.zeros(len(all_filenames))
+    all_cycles     = np.zeros((len(all_filenames), n))
+
+    # Load the values
+    for i, filename in enumerate(all_filenames):
+        iterations, elapsed, mean, best, cycles = load(filename)
+        # Save at the appropriate places:
+        all_iterations[i] = iterations[-1]
+        all_elapsed[i]    = elapsed[-1]
+        all_best[i]       = best[-1]
+        all_mean[i]       = mean[-1]
+        all_cycles[i]     = cycles[-1]
+
+    # Report on the average and stdv
+    avg_best = int(np.mean(all_best))
+    avg_mean = int(np.mean(all_mean))
+    std_best = int(np.std(all_best))
+    std_mean = int(np.std(all_mean))
+    print(u"The best fitness value is %d \u00B1 %d" % (avg_best, std_best))
+    # print(u"The mean fitness value is %d \u00B1 %d" % (avg_mean, std_mean))
+
+    # Check how often we beat the heuristic:
+    number_of_success = np.sum(np.where(all_best < heuristic_value, 1, 0))
+    percentage = (number_of_success/len(all_best))*100
+    print(f"We've beaten the heuristic in {number_of_success} out of {number_of_runs} runs ({percentage} % succes rate).")
+
+    # Report on the best of the best:
+    best_index = np.argmin(all_best)
+    best_best = all_best[best_index]
+    best_cycle = all_cycles[best_index]
+    best_file = all_filenames[best_index]
+    
+    print("The best fitness value observed was %0.2f, for file %s" %(best_best, best_file))
+    print("This best tour was:")
+    print(best_cycle)
+    
+    # Plot the best run as well:
+    load_and_plot(best_file, save_name="best_" + which_tour + "_run_")
+
+    # For tour 50, also make a histogram
+    if which_tour == "tour50":
+        # Make the histogram
+        plt.hist(all_best)
+
+        # Make pretty
         plt.grid()
-        plt.xlabel('Iteration step')
-        plt.ylabel('Fitness')
-        # plt.yscale('log')
-        plt.title('TSP for ' + str(filename))
-        # Save the plots (as PNG and PDF)
-        plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
-        plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
+        plt.xlabel("Best fitness")
+        plt.title("Histogram of best fitness values for tour50")
+        plt.savefig('Plots/histogram_t50_runs.png', bbox_inches='tight')
+        plt.savefig('Plots/histogram_t50_runs.pdf', bbox_inches='tight')
         plt.close()
+    print("Done")
+
+def make_boxplots():
+    """Create boxplots of the runs for t100, t500 and t1000 to compare the EAs performance."""
+    bp_list = []
+    # Create the boxplots
+    colors = {"tour100": "red", "tour500": "blue", "tour1000": "black"}
+
+    keys = ["tour100", "tour500", "tour1000"]
+    for i, key in enumerate(keys):
+        folder_name = "./Runs/" + key + "/"
+        all_filenames = [(folder_name + f) for f in listdir(folder_name) if isfile(join(folder_name, f))]
+
+        # Get empty lists ready to be filled:
+        all_best = np.zeros(len(all_filenames))
+
+        # Load the values
+        for j, filename in enumerate(all_filenames):
+            iterations, elapsed, mean, best, cycles = load(filename)
+            # Save at the appropriate places:
+            all_best[j] = best[-1]
+
+        # Plot the boxplot
+        w = 0.5
+        bp = plt.boxplot(all_best, positions=[i], widths=w, patch_artist=True)
+        # Plot the heuristic value:
+        heuristic_value = heuristic_dict[key]
+        plt.axhline(heuristic_value, ls='--', color=colors[key], alpha=0.9, label=key)
+        bp_list.append(bp)
+
+    # Now, make fancy:
+    # plt.axhline(heuristic_value, color='black', alpha=0.75)
+    # plt.title("Best values (average of 10)")
+    plt.xticks([i for i in range(len(keys))], labels=keys)
+    plt.xlabel("Tour size")
+    plt.ylabel("Fitness")
+    plt.legend()
+    plt.grid(axis='y')
+    # Make beautiful boxplots:
+    # Set the line width and color of the boxplots
+    for bp in bp_list:
+        for element in ["whiskers", "boxes", "caps", "medians"]:
+            plt.setp(bp[element], linewidth=2)
+        for patch in bp["boxes"]:
+            patch.set(facecolor="white")
+    # plt.show()
+    plt.savefig("Plots/Project plots/boxplots_tours.png", bbox_inches='tight')
+    plt.savefig("Plots/Project plots/boxplots_tours.pdf", bbox_inches='tight')
+    plt.close()
 
 
 def run_tour50():
@@ -1780,10 +2023,20 @@ def run_tour50():
 
 if __name__ == "__main__":
 
-    run_tour50()
-    # params_dict = {"lso_cooldown": 200}
-    # mytest = r0708518(params_dict)
+    # --- Collect runs on tour50 for the histogram:
+    # run_tour50()
+
+    # --- Make plots for a collection of runs:
+    # analyze_runs("tour1000")
+
+    # --- Run the TSP solver on a single instance
+    # mytest = r0708518()
     # mytest.optimize('./tour50.csv')
-    # mytest.save_hyperparams("XXX.csv")
+
+    # --- Check performance across tours
+    # make_boxplots()
+
+    # --- Plot an interesting run, to discuss in the report:
+    load_and_plot("Runs/best_t1000_v1.csv", save_name="example_benefit_final_stage")
 
     pass
