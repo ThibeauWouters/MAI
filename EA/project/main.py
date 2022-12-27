@@ -28,6 +28,7 @@ def check_subset_numpy_arrays(a, b):
 
 
 def check_unique(individual):
+    """Test whether all cities of an individual are different. If not, then there is a bug."""
     ok = (len(pd.unique(individual.genome)) == len(individual.genome))
     if not ok:
         diff = len(individual.genome) - len(pd.unique(individual.genome))
@@ -42,12 +43,12 @@ def check_unique(individual):
 
 
 class CandidateSolution:
-
+    """Class to store the genome and fitness of a candidate solution."""
     def __init__(self, genome, fitness):
         self.fitness = fitness
         self.genome = genome
-        # We did not go for self-adaptive crossover/mutation rates...
-        # self.alpha = alpha
+        # Note - the idea was to use this class to get a self-adaptive algorithm, but we did not have time for this
+        # self.alpha = ...
 
 
 class r0708518:
@@ -58,101 +59,129 @@ class r0708518:
         # TODO - explanation!
 
         # --- BASIC ---
+        # Size of the population
         self.lambdaa = 75
-        self.mu      = 50
-        self.distance_matrix = None
+        # Size of the offspring
+        self.mu = 50
 
         # --- OPERATORS ---
+        # Below, we store a string indicating which operators are to be used in the EA loop
         self.which_mutation      = "DM"
         self.which_recombination = "random"
         self.which_elimination   = "lambda plus mu"
         self.which_selection     = "k tournament"
-        # Meta: here, the functions that we implemented in the algorithm are saved, in order to check that the user
+        # Below, the functions that we implemented in the algorithm are saved, in order to check that the user
         # selected a method which is implemented, and if not, we can use the "default" choices in methods defined below
         # Note: "CX", "EX", "GROUP" crossovers are not used anymore as they are inefficient!
         self.implemented_mutation_operators      = ["EM", "DM", "SIM", "ISM", "IVM", "SM", "SDM", "variable", "random"]
-        # These are the operators we are going to use when allowed to do multiple
-        self.available_mut_operators             = ["DM", "SM"]
         self.implemented_recombination_operators = ["PMX", "SCX", "OX", "OX2", "AX", "variable", "random"]
-        # These are the operators we are going to use when allowed to do multiple
-        self.available_rec_operators             = ["PMX", "SCX", "OX", "OX2", "AX"]
         self.implemented_selection_operators     = ["k tournament"]
         self.implemented_elimination_operators   = ["lambda plus mu", "age", "round robin", "k tournament", "ranking"]
+        # For REC and MUT operators, whenever we choose "random" or "variable", these are the operators we use:
+        self.available_rec_operators = ["PMX", "SCX", "OX", "OX2", "AX"]
+        self.available_mut_operators = ["DM", "SM"]
 
+        # --- Hyperparameters for these operators:
+        # Tournament size for selection: varies during  run
+        self.first_tournament_size = 4
+        self.last_tournament_size  = 12
+        self.tournament_size       = self.first_tournament_size
+        # Tournament size for elimination:
+        self.tournament_size_elimination = max(3, int(self.lambdaa // 40))
+        # Size for round robin elimination:
+        self.round_robin_size = 10
+        # Mutation rate: varies during run
+        self.first_alpha = 0.1
+        self.last_alpha  = 0.01
+        self.alpha       = self.first_alpha
+
+        # --- INITIALIZATION ---
+        # We provide percentages of population initialized with the methods specified below:
+        # Random permutations (not advised)
+        self.random_perm_init_fraction = 0
+        # Greedy roads (in between nearest neighbours and legal initialization)
+        self.greedy_road_init_fraction = 0.2
+        # Nearest neighbours
+        self.nnb_road_init_fraction    = 0.2
+        # Remaining uses default: legal initialization
+
+        # --- LSO ---
+        # Specify which LSO operator we are going to use and which are implemented:
+        self.which_lso       = "random"
+        self.implemented_lso = ["2-opt", "adjacent swaps", "swaps", "insertions", "random"]
+        # These are the operators we use when "random" is selected
+        self.available_lso_operators = ["2-opt", "adjacent swaps", "swaps", "insertions"]
+        # --- Hyperparameters
+        # For each phase of the EA, specify the sample size and the depth
+        # By default, we do nothing in recombination and mutation phase
+        self.lso_init_sample_size = 100
+        self.lso_init_depth       = 3
+        self.lso_rec_sample_size  = 0
+        self.lso_rec_depth        = 0
+        # TODO - just delete this?
+        # self.lso_mut_sample_size  = 0
+        # self.lso_mut_depth        = 0
+        self.lso_elim_sample_size = 100
+        self.lso_elim_depth       = 3
+        # Specify to which percentage of individuals we apply the LSO before elimination takes place:
+        self.lso_elim_percentage  = 0.5
+        # Specify when to apply the LSO - cooldown timer
+        self.lso_cooldown = 10
+        self.use_lso = True
+
+        # --- STOPPING CONDITIONS ---
+        # Specify max. number of iterations that the algorithm can do:
+        self.number_of_iterations = 9999999999999999
+        # Specify after how many iterations we stop, if no improvement in best fitness was seen during those iterations
+        self.delta                = 0.1
+        self.no_improvement_max   = 1000
+
+        # --- FINAL STAGE ---
+        # After 80% of allowed time, enter a 'final stage' where we focus on exploitation
+        self.final_param_timer            = (4 / 5) * self.reporter.allowedTime
+        # We are in the final stage until time runs out OR after certain number of iterations:
+        self.final_number_of_iterations   = 300
+        self.final_stage                  = False
+        # Save the index at which we entered the 'final stage'
+        self.final_stage_entered          = 0
+        # We change the population and offspring size for the final stage
+        self.final_stage_lambdaa          = self.lambdaa // 2
+        self.final_stage_mu               = self.mu // 2
+
+        # --- DIVERSITY PROMOTION ---
+        # Specify which metric we use and which are implemented (only Hamming was implemented)
+        self.which_metric        = "Hamming"
+        self.implemented_metrics = ["Hamming"]
+        # Specify how often we compute the diversity index (by default, we never compute it in the final version)
+        self.diversity_check_cooldown = 99999999
+        # Specify the sample size with which we compute the diversity index.
+        self.diversity_sample_size    = self.lambdaa // 4
+        self.diversity_index          = 0
+        # If wanted, only use crowding whenever the diversity index drops below a threshold value (by default, always
+        # use crowding)
+        self.diversity_threshold      = 1.01
+        # Boolean to indicate whether we want to use crowding during elimination phase:
+        self.use_crowding             = True
+        # Sample size used when performing crowding
+        self.crowding_sample_size     = self.lambdaa//25 # was:3
+
+        # --- PROBABILITIES ---
+        # Probability distributions that one can use to select items from a numpy array (see self.get_probabilities)
+        # We only implemented the geometric distribution
+        self.implemented_probability_distributions = ["geom"]
+        # The parameter p of the geometric distribution varies over time. Used to e.g. increase selective pressure
         self.first_p = 0.1
         self.last_p  = 0.6
         self.p       = self.first_p
 
-        # Hyperparameters for these operators:
-        self.first_tournament_size = 4
-        self.last_tournament_size  = 12
-        self.tournament_size       = self.first_tournament_size
-        # Tournament size for the elimination phase: keep this the same
-        self.tournament_size_elimination = max(3, int(self.lambdaa//40))
-        self.first_alpha = 0.1
-        self.last_alpha  = 0.01
-        self.alpha       = self.first_alpha
-        # self.max_alpha   = self.first_alpha
-        # self.min_alpha   = 0.02
-        self.round_robin_size = 10
-        self.final_param_timer = (4/5)*self.reporter.allowedTime
-        self.final_stage = False
-        self.final_stage_entered = 0
-        self.final_stage_lambdaa = self.lambdaa // 2
-        self.final_stage_mu = self.mu // 2
-
-        # --- INITIALIZATION ---
-        self.random_perm_init_fraction = 0
-        self.greedy_road_init_fraction = 0.2
-        self.nnb_road_init_fraction    = 0.2
-
-        # --- LSO ---
-        self.which_lso               = "random"
-        self.implemented_lso         = ["2-opt", "adjacent swaps", "swaps", "insertions", "random"]
-        # These are the operators we are going to use when allowed to do multiple
-        self.available_lso_operators = ["2-opt", "adjacent swaps", "swaps", "insertions"]
-        # self.lso_pivot_rule  = "greedy descent"
-        # LSO hyperparameters
-        self.lso_init_sample_size = 100
-        self.lso_init_depth = 3
-        self.lso_rec_sample_size = 10
-        self.lso_rec_depth = 0
-        self.lso_mut_sample_size = 10
-        self.lso_mut_depth = 0
-        self.lso_elim_sample_size = 100
-        self.lso_elim_depth = 3
-        self.lso_cooldown = 10
-        self.lso_elim_percentage = 0.5
-        self.use_lso = True
-
-        # --- STOPPING CONDITIONS ---
-        self.number_of_iterations = 9999999999999999
-        self.delta = 0.1
-        self.no_improvement_max = 1000
-        # self.final_stage = False
-        # self.final_stage_number_of_iterations = 500
-
-        # WE DISABLED THE FINAL STAGE!!!
-        # self.final_stage_timer = (2 / 5) * self.reporter.allowedTime
-        # self.final_stage_timer = 0
-
-
-        # --- DIVERSITY PROMOTION
-        self.which_metric = "Hamming"
-        # Metrics to measure distances between individuals
-        self.implemented_metrics = ["Hamming"]
-        self.diversity_check_cooldown = 5
-        self.diversity_threshold = 1.01
-        # Start off with the assumption that we have no diversity - promote diversity at the beginning!
-        self.diversity_index = 0
-        self.use_crowding = False
-        self.diversity_sample_size = self.lambdaa//4
-        self.crowding_sample_size  = 3
-
-        # --- OTHER ---
-        # TODO - delete "geom"?
-        # Probability distributions that one can use to select items from a numpy array: see self.get_probabilities
-        self.implemented_probability_distributions = ["geom"]
+        # --- Empty fields - to be determined/stored later on ----
+        self.distance_matrix = None
+        self.connections_matrix = None
+        self.population = None
+        self.offspring = None
+        self.all_individuals = None
+        self.penalty_value = None
+        self.n = None
 
         # Save these default parameters into a dictionary to look them up later on
         self.default_params_dict = {}
@@ -186,9 +215,6 @@ class r0708518:
             print("Elimination operator not recognized. Using default: %s" % default)
             self.which_elimination = default
 
-        # Save the elimination operator: if we do crowding, we want to resort back to this one!
-        self.chosen_elimination_operator = self.which_elimination
-
         if self.which_selection not in self.implemented_selection_operators:
             default = self.default_params_dict["which_selection"]
             print("Selection operator not recognized. Using default: %s" % default)
@@ -212,12 +238,10 @@ class r0708518:
         # Fill the remainder with "default" choice:
         self.random_road_init_number = int(round(self.lambdaa - total_so_far))
         print("Initialized with %d random permutations, %d greedy roads, %d NN and %d legal roads." % (
-        self.random_perm_init_number, self.greedy_road_init_number, self.nnb_road_init_number,
-        self.random_road_init_number))
+            self.random_perm_init_number, self.greedy_road_init_number, self.nnb_road_init_number,
+            self.random_road_init_number))
 
-        # TODO - make sure the defaults are implemented correctly and conveniently?
-
-        # Show which implementations were chosen by the user:
+        # Print which implementations were chosen by the user:
         print("------------------------------------")
         print("Mutation operator:      %s" % self.which_mutation)
         print("Recombination operator: %s" % self.which_recombination)
@@ -241,31 +265,22 @@ class r0708518:
             # Start off with uniform probabilities
             print("Available LSO operators: ", self.available_lso_operators)
 
-        # TODO - allow for more general or check if condition is valid?
+        # For age-based elimination, lambda has to be equal to mu as we do a replacement.
         if self.which_elimination == "age":
-            # For age replacement where we replace current generation with offspring, make sure they are same size
             smallest = min(self.lambdaa, self.mu)
             self.lambdaa = smallest
             self.mu = smallest
 
     def optimize(self, filename):
         """The evolutionary algorithm's main loop"""
-        start = time.time()
-        timeLeft = self.reporter.allowedTime
-        # Create empty lists to be filled with values to report progress
-        mean_fit_values = []
-        best_fit_values = []
 
-        # To keep track of diversity, measure it
-        diversities = []
-
+        # --- PREPARATIONS
         # Read distance matrix from file.
         file = open(filename)
         distance_matrix = np.loadtxt(file, delimiter=",")
         file.close()
+
         # Replace inf values with just a penalty term
-        # TODO - what are good values for penalty term?
-        # First, replace inf values by -1
         distance_matrix = np.where(distance_matrix == float('inf'), -1, distance_matrix)
         # Get max value, use it to construct a penalty term, and replace again
         max_distance = np.max(distance_matrix.flatten())
@@ -276,91 +291,94 @@ class r0708518:
 
         # Save the penalty term for convenience for later on
         self.penalty_value = penalty_value
-        # Save
+        # Save distance matrix as a field
         self.distance_matrix = distance_matrix
         # Save n, the size of the problem (number of cities)
         self.n = np.size(self.distance_matrix[0])
 
-        # Also construct the connections matrix
+        # Also construct the connections matrix (see report for details)
         self.construct_connections_matrix()
+
+        # Check how much time we have
+        timeLeft = self.reporter.allowedTime
+        # Initialize iteration counters
+        global_counter         = 1
+        no_improvement_counter = 0
+        # Initialize variables keeping track of the convergence
+        current_best  = 0
+        previous_best = 0
+
+        # Create empty lists to be filled with values to report progress
+        mean_fit_values = []
+        best_fit_values = []
+
+        # To check the diversity, save it and plot it at the end.
+        diversities = []
 
         # Allocate memory for population and offspring
         self.population = np.empty(self.lambdaa, dtype='object')
-        self.offspring = np.empty(self.mu, dtype='object')
+        self.offspring  = np.empty(self.mu, dtype='object')
 
-        # Initialize the population, and sort based on the final column, which contains the fitness value
+        # To keep track of variable probabilities for crossover and mutation (if desired)
+        delta_f_crossover = [[] for i in range(len(self.available_rec_operators))]
+        delta_f_mutation = [[] for i in range(len(self.available_mut_operators))]
+
+        # INITIALIZATION
         self.initialize()
-
-        # Initialize certain variables that keep track of the convergence
-        global_counter = 1
-        no_improvement_counter = 0
-        current_best = 0
-        previous_best = 0
 
         """This is where the main evolutionary algorithm loop comes:"""
         while global_counter < self.number_of_iterations:
-            # Save the current timestamp (based on reporter)
+            # Increment the counter for the number of iterations
+            global_counter += 1
+
+            # Save the current timestamp (based on reporter) - used to get the values of variable hyperparameters
             self.t = self.reporter.allowedTime - timeLeft
-            if self.t > self.final_param_timer and not self.final_stage:
-                print("Entering final stage of the algorithm... %d seconds left" %int(round(timeLeft)))
-                # In the final seconds of the run, kill all diversity and go completely for exploitation
-                self.use_crowding = False
+            # If we are later than 80% of allowed time, we enter the so-called "final stage"
+            # Also (for tour 50 mostly) if no improvement was seen
+            if (self.t > self.final_param_timer and not self.final_stage) or (no_improvement_counter >= self.no_improvement_max):
+                # Save the index at which we entered final stage (used in plots)
                 self.final_stage_entered = global_counter
-                self.final_stage = True
-                # Make sure the crowding mechanism never gets activated again.
+                # Perform at most X iterations from now on, or until time runs out:
+                self.number_of_iterations = global_counter + self.final_number_of_iterations
+                print("Entering final stage of the algorithm (%d s or %d iterations)" % (int(round(timeLeft)), self.final_number_of_iterations))
+                # Disable no improvement counter
+                no_improvement_counter = -99999999999999
+                # No longer do crowding - we don't care about diversity anymore, go full exploitation
+                self.use_crowding = False
+                self.final_stage  = True
+                # Make sure the crowding mechanism never gets activated again:
                 self.diversity_threshold = -0.01
-                self.lso_elim_depth += 2
+                # Crank up the LSO
+                self.lso_elim_depth       += 2
                 self.lso_elim_sample_size += 100
-                # self.alpha = 0
+                self.lso_elim_percentage   = 1
+                # Change the popualtion and offspring size
                 self.lambdaa = self.final_stage_lambdaa
-                self.mu = self.final_stage_mu
+                self.mu      = self.final_stage_mu
 
-
-            # TODO - TESTING if there is a general bug in the code, KEEP for now, but remove at the end!
-            for individual in self.population:
-                check_unique(individual)
-
-            # Adapt the hyperparameters:
-            # Get the current max value for alpha
+            # Adapt the variable hyperparameters (linear interpolation between 2 specified values:
             self.alpha = self.interpolate_parameter(self.first_alpha, self.last_alpha)
-            # Update the current alpha value based on the diversity index last measured
-            # self.alpha = max(self.min_alpha, min(self.max_alpha, 1 - self.diversity_index))
-
             self.tournament_size = self.interpolate_parameter(self.first_tournament_size,
                                                               self.last_tournament_size)
             self.tournament_size = int(floor(self.tournament_size))
-
-            # Vary the parameter for the probability distributions, p, based on a predefined scheme
             if self.which_recombination == "variable" or self.which_mutation == "variable":
                 self.p = self.interpolate_parameter(self.first_p, self.last_p)
 
-            # To keep track of variable probabilities for crossover and mutation (if desired)
-            if self.which_recombination == "variable":
-                delta_f_crossover = [[] for i in range(len(self.available_rec_operators))]
-            if self.which_mutation == "variable":
-                delta_f_mutation = [[] for i in range(len(self.available_mut_operators))]
-
-            # Old best fitness value is previous 'current' one
-            previous_best = current_best
-
-            # For reporting progess: get mean and best values
-            # Get the fitness, and find mean and best ones:
-            fitnesses = [ind.fitness for ind in self.population]
+            # Update fitness values for reporting the progress:
+            previous_best  = current_best
+            fitnesses      = [ind.fitness for ind in self.population]
             mean_objective = np.mean(fitnesses)
-            best_index = np.argmin(fitnesses)
+            best_index     = np.argmin(fitnesses)
             best_candidate = self.population[best_index]
-            best_solution = best_candidate.genome
+            best_solution  = best_candidate.genome
             best_objective = best_candidate.fitness
-            # best_solution = best[:-1].astype('int')
-
-            # Update the current best fitness value
-            current_best = best_objective
+            current_best   = best_objective
 
             # If not enough improvement was seen this iteration, count up
             if abs(previous_best - current_best) < self.delta:
                 no_improvement_counter += 1
             else:
-                # If enough improvement was seen: reset counter
+                # If enough improvement was seen: reset counter to zero
                 no_improvement_counter = 0
 
             # Add fitness values to a list to plot them later on:
@@ -374,20 +392,18 @@ class r0708518:
 
                 # Check whether or not we want to promote diversity (in elimination phase)
                 if self.diversity_index < self.diversity_threshold:
-                    # print("Diversity promotion! Counter %d" % global_counter)
                     self.use_crowding = True
                 else:
-                    # If population is diverse enough, revert back to the old elimination operator.
+                    # If population is diverse enough, stop using crowding until next diversity measurement
                     self.use_crowding = False
 
             # CROSSOVER
 
             for i in range(self.mu):
-
+                # Select two parents
                 parent1, parent2 = self.parents_selection()
-                # parent_fitness = parent1[-1]
                 # Note: recombination and mutation ONLY work with genome, NOT the fitness at the end
-                # here, "child" has no fitness at the end and is only refering to the genome!
+                # here, "child" has no actual fitness and is only refering to the genome!
                 if self.which_recombination == "variable":
                     # If we are using a variable crossover operator, we also return the index of used operator
                     index, child = self.recombination(parent1, parent2)
@@ -396,7 +412,7 @@ class r0708518:
                     delta_f_crossover[index] = np.append(delta_f_crossover[index], difference)
                 else:
                     child = self.recombination(parent1, parent2)
-                # Perform LSO if wanted
+                # Perform LSO on computed child if wanted (by default: no LSO at this stage)
                 child.genome = self.lso(child.genome, depth=self.lso_rec_depth, sample_size=self.lso_rec_sample_size)
                 self.offspring[i] = child
 
@@ -410,10 +426,11 @@ class r0708518:
 
             for i in range(1, len(self.all_individuals)):
                 individual = self.all_individuals[i]
+                # "Flip a coin" to determine whether or not we mutate this individual
                 if not self.final_stage and random.uniform(0, 1) <= self.alpha:
-                    # Now, we mutate!
                     if self.which_mutation == "variable":
                         # If we are using a variable mutation operator, we also return the index of used operator
+                        # and save the difference in fitness, in order to rank the operators later on
                         index, new = self.mutation(individual)
                         # Save info about this recombination in the appropriate list
                         difference = self.difference_fitness(individual.genome, new.genome)
@@ -421,36 +438,29 @@ class r0708518:
                         delta_f_mutation[index] = np.append(delta_f_mutation[index], difference)
                     else:
                         individual = self.mutation(individual)
-                # Perform LSO if wanted
-                # individual.genome = self.lso(individual.genome, depth=self.lso_mut_depth, sample_size=self.lso_mut_sample_size)
-                # We reach this with or without mutation
                 # Now, compute the fitness and save into offspring array
                 individual.fitness = self.fitness(individual.genome)
                 self.all_individuals[i] = individual
 
-            # TODO - Mutate the original population as well?
-
             # LSO
 
             # We only perform the lso to the top individuals (based on fitness)
-            number_of_lso = int(round(self.lso_elim_percentage*len(self.all_individuals)))
+            number_of_lso = int(round(self.lso_elim_percentage * len(self.all_individuals)))
             for i in range(number_of_lso):
                 old, old_fitness = self.all_individuals[i].genome, self.all_individuals[i].fitness
                 better_genome = self.lso(old, depth=self.lso_elim_depth, sample_size=self.lso_elim_sample_size)
                 better_fitness = self.efficient_fitness(better_genome, old, old_fitness)
-                # Store into new individual. Keep old alpha
                 better_individual = CandidateSolution(better_genome, better_fitness)
-
                 self.all_individuals[i] = better_individual
 
             # ELIMINATION
+
             # Make a new, empty population
             self.population = np.empty(self.lambdaa, dtype='object')
             # Sort based on fitness (used in some elimination schemes + for elitism)
             self.all_individuals = self.sort_fitness(self.all_individuals)
             self.elimination()
 
-            global_counter += 1
 
             # For testing: see advancements:
             # Activate the LSO after certain number of iterations
@@ -462,23 +472,15 @@ class r0708518:
             # If we are using variable crossover/mutation, update their probabilities
             if self.which_recombination == "variable":
                 average_improvements = np.array([np.mean(deltas) for deltas in delta_f_crossover])
-                # print(delta_f_crossover)
-                # print(average_improvements)
                 sort_indices = np.argsort(average_improvements)
                 probabilities = self.get_probabilities(len(self.available_rec_operators), param=self.p)
                 self.recombination_probabilities = probabilities[sort_indices]
-            # print("Sorted:")
-            # print(self.recombination_probabilities)
 
             if self.which_mutation == "variable":
                 average_improvements = np.array([np.mean(deltas) for deltas in delta_f_mutation])
-                # print(delta_f_crossover)
-                # print(average_improvements)
                 sort_indices = np.argsort(average_improvements)
                 probabilities = self.get_probabilities(len(self.available_mut_operators), param=self.p)
                 self.mutation_probabilities = probabilities[sort_indices]
-            # print("Sorted:")
-            # print(self.recombination_probabilities)
 
             # Call the reporter with:
             #  - the mean objective function value of the population
@@ -487,56 +489,23 @@ class r0708518:
             #    with city numbering starting from 0
             timeLeft = self.reporter.report(mean_objective, best_objective, best_solution)
 
-            # Check if there was no significant improvement for the final X amount of iterations or almost finished:
-            # if (
-            #         no_improvement_counter >= self.no_improvement_max or timeLeft < self.final_stage_timer) and not self.final_stage:
-            #     no_improvement_counter = 0
-            #     self.no_improvement_max = 999999999999999999999
-            #     self.final_stage_entered = global_counter - 1
-            #     print("------------------------------------")
-            #     print("Entering final stage of this run...")
-            #     self.number_of_iterations = global_counter + self.final_stage_number_of_iterations
-            #     # print("Going to run for another %d iterations or until time finished (%d seconds)" % (self.final_stage_number_of_iterations, timeLeft))
-            #     self.final_stage = True
-            #     self.alpha = 0
-            #     self.use_lso = True
-            #     self.lso_cooldown = 3
-            #     self.use_crowding = False
-            #     self.lso_elim_depth += 5
-            #     self.lambdaa = self.final_stage_lambdaa
-            #     self.mu = self.final_stage_mu
-            #     # self.which_elimination = "lambda plus mu"
-            #     self.which_recombination = "random"
-            #     print("Using other recombination operators out of: ", self.available_rec_operators)
-
             # Our code gets killed if time is up!
             if timeLeft < 0:
                 break
 
         # --- Post processing ---
-
-        # TODO - delete this at the end
-        end = time.time()
-        time_diff = end - start
-        number_of_minutes = time_diff // 60
-        number_of_seconds = time_diff % 60
         print("------------------------------------")
-        print(
-            f"The algorithm took {number_of_minutes} m {round(number_of_seconds)} s and {global_counter} iterations.")
+        print("We did %d iterations" % global_counter)
         print("The final best    fitness value was {:,}".format(round(best_objective)).replace(',', ' '))
         print("The final average fitness value was {:,}".format(round(mean_objective)).replace(',', ' '))
-        # print(f"The final best individual was: {best_solution}")
-        # TODO - delete this for testing purposes
-        # all_different = (len(pd.unique(best_solution)) == len(best_solution))
-        # print(f"All different? {all_different}")
 
         # For our own purpose, make a plot as well:
         self.make_fitness_plot(mean_fit_values, best_fit_values, filename, chop=10)
         # Also make a plot where we only show the best fitness during the evolution
         self.make_fitness_plot(mean_fit_values, best_fit_values, filename, plot_mean=False, plot_name="best_fitness")
-        self.make_diversity_plot(diversities, filename)
-
         # Plot diversity
+        if len(diversities) > 0:
+            self.make_diversity_plot(diversities, filename)
 
         # Return the best fitness value & best solution
         # TODO - change this again
@@ -553,17 +522,16 @@ class r0708518:
 
         # Empty list to save all the subpopulations we are going to construct
         subpopulations = []
-        # TODO - check if this is possible automatically but I guess not...
 
         # Initialize by random permutation:
         if self.random_perm_init_number != 0:
             subpopulations.append(self.random_perm_initialize(self.random_perm_init_number))
 
-        # Initialize by random selection of roads, which avoids the infs:
+        # Initialize by random selection of roads, which avoids the illegal roads:
         if self.random_road_init_number != 0:
             subpopulations.append(self.road_initialize(self.random_road_init_number, method="random"))
 
-        # Initialize by stochastically, greedily selecting the roads:
+        # Initialize by randomly but greedily selecting the roads:
         if self.greedy_road_init_number != 0:
             subpopulations.append(self.road_initialize(self.greedy_road_init_number, method="greedy"))
 
@@ -575,10 +543,11 @@ class r0708518:
         self.population = np.concatenate(subpopulations)
 
     def construct_connections_matrix(self):
-        """Creates a matrix from the distance matrix of the problem, where each row i specifies which cities
-			one can reach from i, avoiding the roads that give inf (or equivalently, large penalty values). Used
-			in constructing initial populations in a more informed manner. In each rows, these possible cities
-			are ordered based on their cost, ranging from low to high. The result is saved as instance."""
+        """Creates a matrix from the distance matrix of the problem, where each row i specifies which cities one can
+        reach from i, avoiding the roads that give inf (or equivalently, large penalty values). Used in constructing
+        initial populations in a more informed manner. In each rows, these possible cities are ordered based on their
+        cost, ranging from low to high. The result is saved as instance attribute. """
+
         # Get the connections matrix, showing the valid routes
         connections_matrix = []
 
@@ -602,35 +571,15 @@ class r0708518:
 
         self.connections_matrix = connections_matrix
 
-    def get_probabilities(self, size, distr="geom", param=0.4):
-        """Generates a numpy array of probabilities to select the entries of that numpy array.
-			values: numpy array containing the values for which we want to get probabilities
-			distr: string indiciating which distribution should be used for getting the probabilities. Default is
-			the geometric distribution, which is a discrete version of the exponential distribution."""
-
-        # TODO - take these values into account when getting the probabilities?
-        # TODO - these things such as "geom": get them as fields, to easily adapt to new things?
-        if distr not in self.implemented_probability_distributions:
-            distr = "geom"
-
-        # Geometric distribution:
-        if distr == "geom":
-            # Set the number of failures before the first success (k)
-            k = np.array([i for i in range(size)])
-            # Calculate the probabilities for each value of k using the geometric probability distribution
-            probabilities = param * (1 - param) ** (k - 1)
-            return probabilities / np.sum(probabilities)
-
     def construct_tour(self, current, final_index, final_city, method="random"):
         """Starting from an individual which is only constructed partially, continue constructing a full individual,
-			taking into account the possible connections (no infs in distance matrix) and possibly also take into
-			account the magnitude of the cost of taking a road. This function is called recursively, in order to
-			be able to backtrack in case we get "stuck", i.e., we end up in a city connected to cities which were
-			already selected in the construction of the individual.
-			Parameters:
-			current: individual, numpy array of size n, possibly containing -1 for cities which were not assigned yet
-			final_index: the index at which the final city in individual was assigned in a previous call
-			final_city: the city last assigned in the previous function call."""
+        taking into account the possible connections (no infs in distance matrix) and possibly also take into account
+        the magnitude of the cost of taking a road. This function is called recursively, in order to be able to
+        backtrack in case we get "stuck", i.e., we end up in a city connected to cities which were already selected
+        in the construction of the individual. Parameters: current: individual, numpy array of size n,
+        possibly containing -1 for cities which were not assigned yet final_index: the index at which the final city
+        in individual was assigned in a previous call final_city: the city last assigned in the previous function
+        call. """
 
         # If the individual is finished, return it
         if final_index == (self.n - 1):
@@ -687,10 +636,7 @@ class r0708518:
             # Try each city in the connections until we finish the individual, then return
             while len(possible_connections != 0):
                 # For nearest neighbours, choose the first city as this is closest
-                # print("Current connections: ", possible_connections)
-                # print("All cost values : ", self.distance_matrix[final_city][possible_connections])
                 current_city = possible_connections[0]
-                # print("Chosen cost: ", self.distance_matrix[final_city][current_city])
                 # Delete it from the possible connections in order to be able to backtrack afterwards
                 possible_connections = possible_connections[1:]
                 # Save into individual
@@ -704,6 +650,7 @@ class r0708518:
             return None
 
     def road_initialize(self, number=10, method="random"):
+        """Initializes an individual using legal roads only. Can do random, greedy or NN (see report for details)."""
 
         # Check that the provided method is a valid one, otherwise resort to default
         if method not in ["random", "greedy", "nearest nb"]:
@@ -722,7 +669,7 @@ class r0708518:
             starting_point = np.random.choice(self.n)
             individual[0] = starting_point
             # Call construct_tour, which recursively makes a road
-            # Note: here, individual is a TSP tour
+            # Note: here, individual is a TSP tour, not yet a CandidateSolution
             individual = self.construct_tour(individual, 0, starting_point, method=method)
             if individual is not None:
                 # Make sure that the genome starts with city 0 because of our convention
@@ -730,86 +677,26 @@ class r0708518:
                 individual = np.roll(individual, -idzero)
                 # Improve individual with LSO operator (nothing changed if lso_init_depth = 0)
                 individual = self.lso(individual, depth=self.lso_init_depth, sample_size=self.lso_init_sample_size)
-                # Compute its fitness and append at the end
+                # Compute its fitness
                 fit = self.fitness(individual)
-                # individual = np.append(individual, fit)
                 # Construct a new instance of candidate solution
                 candidate = CandidateSolution(individual, fit)
                 result.append(candidate)
                 counter += 1
             else:
+                # In case there is a bug, print something to the screen
                 print("I might be stuck here...")
 
         return result
 
-    @DeprecationWarning
-    def road_initialize_old(self, number=10, method="random"):
-        """At each city, selects randomly along the valid roads to another city to generate the initial population.
-			Number: integer indicating how many individuals should be constructed in this way."""
-
-        if method not in ["random", "greedy"]:
-            print("Initialization method not recognized. Defaulting to random.")
-            method = "random"
-
-        # Generate a "subpopulation" based on how many are generated using this method
-        result = np.empty((number, self.n + 1))
-
-        # Construct "number" amount of individuals
-        counter = 0
-        while counter < number:
-            # Initialize a new individual, start filling at zero
-            individual = np.full(self.n, -1)
-            individual[0] = 0
-            seen = np.array([0])
-            current_city = 0
-            # Fill up the individual
-            i = 1
-            while i < self.n:
-                # for i in range(1, self.n):
-                # Check where we can go from here
-                current_connections = self.connections_matrix[current_city]
-                # From these possibilities, delete those that are already used
-                possible_connections = np.setdiff1d(current_connections, seen, assume_unique=True)
-                # If no more options exist, break outside the loop (retry)
-                if len(possible_connections) == 0:
-                    print("We got stuck in the smart initialization! Wasted resources!")
-                    break
-                # Else: generate the next city randomly among possibilities
-                if method == "random":
-                    current_city = np.random.choice(possible_connections)
-                elif method == "greedy":
-                    probabilities = self.get_probabilities(len(possible_connections))
-                    current_city = np.random.choice(possible_connections, p=probabilities)
-                # Save into seen
-                seen = np.append(seen, current_city)
-                # Save it in the individual
-                individual[i] = current_city
-
-            # Check if we used all cities (completed the individual) or not, to increase counter
-            if len(seen) == self.n:
-                # Save the individual
-                # Compute its fitness and append at the end
-                fit = self.fitness(individual)
-                # individual = np.append(individual, fit)
-                # Save it in the result, and increase counter
-                candidate = CandidateSolution(individual, fit)
-                result[counter] = candidate
-                counter += 1
-
-        # We are done
-        return result
-
     def random_perm_initialize(self, number=10):
         """Initialize individuals by a random permutation of the cities. Quick and easy, but may end up selecting
-			illegal roads, both inf roads as well as roads connecting a city to itself which may mislead the
-			algorithm since those have a low cost."""
-        # size = np.size(self.distance_matrix[0]) #old#
+        illegal roads, both inf roads as well as roads connecting a city to itself which may mislead the algorithm
+        since those have a low cost. Not recommended to use this initialization method."""
 
         result = np.empty((number, self.n))
         for i in range(number):
             # Random permutation, but always start in 'city 0'
-            # TODO: can this be optimized?
-            # Make sure that a zero remains that the very first position:
             individual = np.zeros(self.n)
             # Permute the remaining cities 1, ..., n:
             random_permutation = np.random.permutation(self.n - 1) + 1
@@ -863,7 +750,7 @@ class r0708518:
         else:
             new_genome = self.order_based_crossover(parent1, parent2)
 
-        # Instantiate new CandidateSolution object, assign arbitrary fitness value 0 (to be computed later)
+        # Instantiate new CandidateSolution object, assign arbitrary fitness value (to be computed later)
         child = CandidateSolution(new_genome, 99999999999999)
 
         return child
@@ -903,17 +790,19 @@ class r0708518:
         child = np.full(len(tour1), -1)
 
         # Generate a sample of indices of length k
-        # TODO - choose a different version? Now, k is fixed to certain ratio of tour length, so close to mutation
         k = np.random.choice(np.arange(2, self.n - 2))
         indices = np.sort(np.random.choice([i for i in range(1, len(tour1))], size=k, replace=False))
 
-        # Get cities at those positions at tour 2, look up their indices in tour1
+        # Get cities at those positions at tour 2
         cities = tour2[indices]
+        # Look up their indices in tour1
         new_indices = np.in1d(tour1, cities)
-
-        # Copy tour1 at places which are not the new indices, copy cities in preserved order at selected indices
-        child[~new_indices] = tour1[~new_indices]
+        # Copy 'cities' in preserved order at selected indices
         child[new_indices] = cities
+        # Copy tour1 at places which are not these new indices (note: '~'is negation), and np.in1d returns
+        # a mask containing true and false values, not integers as indices!
+        child[~new_indices] = tour1[~new_indices]
+
         return child
 
     def alternating_crossover(self, parent1, parent2):
@@ -935,8 +824,6 @@ class r0708518:
         tour1 = parent1.genome
         tour2 = parent2.genome
 
-        # TODO - only consider rolls in 1D
-
         # STEP 1: construct the edge table
 
         # Initialize the edge table
@@ -949,7 +836,6 @@ class r0708518:
         roll_p2_left = np.roll(tour2, 1)
         roll_p2_right = np.roll(tour2, -1)
 
-        # TODO - can be done faster?
         for i in range(len(tour1)):
             # Look at edges of allele at i in tour 1
             index = tour1[i]
@@ -983,10 +869,7 @@ class r0708518:
             # In case this list is empty:
             if len(edges) == 0:
                 # Pick a random element
-                # current_element += 1
                 current_element = random.sample(unassigned, 1)[0]
-            # print("random sample")
-            # continue
             else:
                 # OPTION 1 --- if there is a common edge, choose that element
                 unique, counts = np.unique(edges, return_counts=True)
@@ -1090,8 +973,6 @@ class r0708518:
             # In case we completed the cycle, start the next 'cycle' -- swap order of tours
             if index == first_index:
                 if -1 not in child:
-                    # fit = self.fitness(child)
-                    # child = np.append(child, fit)
                     return child
                 else:
                     # Start a new cycle
@@ -1114,44 +995,23 @@ class r0708518:
         child = np.full(len(tour1), -1)
         child[0] = 0
         # Generate cut points a and b: these are two random indices, sorted
-        # TODO - make sure that a and b differ by "enough"?
         a, b = np.sort(np.random.permutation(np.arange(1, len(tour1)))[:2])
-        # print("a ", a)
-        # print("b ", b)
-        # print("Length ", len(tour1))
         # Get the cut from the 2nd tour
         cut = tour2[a:b]
-
-        # Cross the cut
+        # "Cross the cut"
         child[a:b] = cut
-
         # Check which indices remain to be assigned
         remaining_indices = np.where(child == -1)[0]
-
         # Iterate over the remaining entries
         for i in remaining_indices:
             # Get the value we WISH to fill in:
             value = tour1[i]
-
             # If this element, or any we will now find, was already copied from tour 2:
             while value in cut:
                 # look up index of this element in tour2
                 index = np.where(tour2 == value)  # [0][0]
                 # Then use the mapping cut1 <-> cut2 to get new value. Check if new value also in cut2 (while loop)
                 value = tour1[index]
-                ### TESTING: if we are again at the same index, we are looping forever!
-                if len(index) > 1:
-                    print("Bug in PMX")
-                    print("P1 ", tour1)
-                    print("P2 ", tour2)
-                    print("Ch ", child)
-
-                if index == i:
-                    print("Bug in PMX")
-                    print("P1 ", tour1)
-                    print("P2 ", tour2)
-                    print("Ch ", child)
-
             # if not, just use the value of tour 1
             child[i] = value
 
@@ -1160,28 +1020,20 @@ class r0708518:
     @DeprecationWarning
     def group_recombination(self, parent1, parent2):
         """Copies the intersection of two parents. Distributes the remaining cities of first parent to child after
-			permutation. First implementation of recombination algorithm."""
+        permutation. First implementation of recombination algorithm. """
 
         tour1 = parent1.genome
         tour2 = parent2.genome
 
-        # TODO - give this the correct name!
-
         # Child starts off with the intersection of the parents. Fill remaining with -1 (to recognize it later).
         # Since cities start in 0, this constraint will automatically copy over to child.
         child = np.where(tour1 == tour2, tour1, -1)
-
         # Get the indices of child which were not assigned yet.
         leftover_indices = np.where(child == -1)[0]
-
         # Get the cities that appear in one of the tours, permute them
-        # TODO does it matter WHICH tour, maybe choose the one with best fitness?
         leftover_cities_permuted = np.random.permutation(tour1[leftover_indices])
-
         # Store permuted cities in the child
         child[leftover_indices] = leftover_cities_permuted
-
-        # Compute the fitness value and return
         return child
 
     ####################
@@ -1217,9 +1069,7 @@ class r0708518:
         else:
             new_genome = self.simple_inversion_mutation(individual)
 
-        # Instantiate new CandidateSolution object, assign fitness value 0 (compute later on)
-        # TODO - crossover the hyperparams . . .
-        # ...
+        # Instantiate new CandidateSolution object, assign arbitrary fitness value (compute later on)
         new_individual = CandidateSolution(new_genome, 99999999999999)
 
         return new_individual
@@ -1247,8 +1097,8 @@ class r0708518:
             return i, self.scrambled_displacement_mutation(individual)
 
     def scrambled_displacement_mutation(self, individual):
-        """(SDM) Takes a random subtour and inserts it, in 'scrambled' (permuted) order, at a random place.
-			Note that this extends both the scramble and displacement mutation, where the subtour gets scrambled."""
+        """(SDM) Takes a random subtour and inserts it, in 'scrambled' (permuted) order, at a random place. Note that
+        this extends both the scramble and displacement mutation, where the subtour gets scrambled. """
 
         tour = individual.genome
 
@@ -1288,8 +1138,8 @@ class r0708518:
         return tour
 
     def insertion_mutation(self, individual):
-        """(ISM) Takes a random city and inserts it at a random place.
-			Note that this is a special case of displacement mutation, where the subtour has length 1."""
+        """(ISM) Takes a random city and inserts it at a random place. Note that this is a special case of
+        displacement mutation, where the subtour has length 1. """
 
         tour = individual.genome
 
@@ -1315,7 +1165,6 @@ class r0708518:
     @jit(forceobj=True)
     def displacement_mutation(self, individual):
         """(DM) Cuts a subtour of the individual, and places it in a random place"""
-        # TODO - enforce certain length of subtour??? Or make sure don't return same?
 
         tour = individual.genome
 
@@ -1334,12 +1183,6 @@ class r0708518:
 
         tour = individual.genome
 
-        # idea: https://stackoverflow.com/questions/22847410/swap-two-values-in-a-numpy-array
-        # more efficient to use numpy: See comments below this answer: https://stackoverflow.com/a/9755548/13331858
-        # old method: # random.sample(range(1, len(tour)), 2)
-
-        # Note: we only change from index 1: always keep index 0 equal to 0
-
         # Get two indices at which we will do a swap
         indices = np.random.permutation(np.arange(1, len(tour)))[:2]
 
@@ -1350,8 +1193,6 @@ class r0708518:
     #####################
     # --- SELECTION --- #
     #####################
-
-    # Selecting parents to generate the offspring
 
     def parents_selection(self):
         """Selects two parents in the population. Only k tournament implemented."""
@@ -1392,8 +1233,6 @@ class r0708518:
             self.age_elimination()
         elif which == "k tournament":
             self.k_tournament_elimination(self.all_individuals)
-        # elif which == "crowding":
-        #     self.crowding(self.all_individuals)
         elif which == "round robin":
             self.round_robin_elimination(self.all_individuals)
         elif which == "ranking":
@@ -1406,8 +1245,8 @@ class r0708518:
         self.population[0] = all_individuals[0]
         # the remainder of the new population gets chosen based on their "rank" (determined by fitness).
         # Note: here we make use of the fact that the all_individuals array is sorted based on their fitness.
-        probs = self.get_probabilities(len(all_individuals)-1, param=self.p)
-        self.population[1:] = np.random.choice(all_individuals[1:], size=self.lambdaa-1, replace=False, p=probs)
+        probs = self.get_probabilities(len(all_individuals) - 1, param=self.p)
+        self.population[1:] = np.random.choice(all_individuals[1:], size=self.lambdaa - 1, replace=False, p=probs)
 
         return
 
@@ -1436,16 +1275,16 @@ class r0708518:
             # If we are still constructing,
             # Failsafe: prevent a crash if length of all individuals drops below provided sample size:
             if len(all_individuals) < tournament_sample_size:
-                tournament_sample_size = len(all_individuals)//2
+                tournament_sample_size = len(all_individuals) // 2
             # Same for sampling for the crowding
             if len(all_individuals) < crowding_sample_size:
                 crowding_sample_size = len(all_individuals) // 2
             # Do k tournament the sneaky way: since all_individuals is sorted on fitness, just sample indices
-            sampled_indices = np.sort(np.random.choice(len(all_individuals), size=tournament_sample_size, replace=False))
+            sampled_indices = np.sort(
+                np.random.choice(len(all_individuals), size=tournament_sample_size, replace=False))
             # Because we sorted all individuals based on fitness, the earlier the index the better the fitness!
             best_index = sampled_indices[0]
             chosen = all_individuals[best_index]
-            # TODO - OK? delete this individual from all_individuals
             all_individuals = np.delete(all_individuals, best_index, axis=0)
             # Hence add that individual to the population
             self.population[counter] = chosen
@@ -1456,7 +1295,8 @@ class r0708518:
                 sampled_indices = np.random.choice(len(all_individuals), size=crowding_sample_size, replace=False)
                 sampled_individuals = all_individuals[sampled_indices]
                 # Get the closest in distance
-                distances = [self.hamming_distance(chosen.genome, individual.genome) for individual in sampled_individuals]
+                distances = [self.hamming_distance(chosen.genome, individual.genome) for individual in
+                             sampled_individuals]
                 # Get index of the one that has closest distance...
                 best_index_distances = np.argmin(distances)
                 # ... then find the index in all_individuals that corresponded to this
@@ -1467,46 +1307,6 @@ class r0708518:
             counter += 1
 
         return
-
-    # def crowding(self, all_individuals, sample_size=None):
-    #     """Performs crowding. Selection is based on idea of lambda plus mu"""
-    #
-    #     if sample_size is None:
-    #         sample_size = self.crowding_sample_size
-    #
-    #     counter = 0
-    #     while counter < self.lambdaa:
-    #         # Check termination condition: if number of already selected plus remaining is lambda, then "fill spots"
-    #         if (len(all_individuals) + counter) == self.lambdaa:
-    #             self.population[counter:] = all_individuals
-    #             return
-    #         # If not: continue construction, so choose the next individual for the next round
-    #         if self.crowding_method == "lambda plus mu":
-    #             # First one in array gets selected to next round:
-    #             chosen = all_individuals[0]
-    #         else:
-    #             # The one chosen by k tournament proceeds
-    #             chosen = self.k_tournament(all_individuals, self.tournament_size_elimination)
-    #         # Add the chosen individual to the population under construction
-    #         self.population[counter] = chosen
-    #         # Delete it from the array
-    #         all_individuals = np.delete(all_individuals, 0, axis=0)
-    #         # Failsafe: prevent a crash if length of all individuals drops below provided sample size:
-    #         if len(all_individuals) < sample_size:
-    #             sample_size = 1
-    #         # Search for the one closest to chosen among remaining individuals, but sample them:
-    #         sampled_indices = np.random.choice(len(all_individuals), size=sample_size, replace=False)
-    #         sampled_individuals = all_individuals[sampled_indices]
-    #         # Get the closest in distance
-    #         distances = [self.hamming_distance(chosen.genome, individual.genome) for individual in sampled_individuals]
-    #         # Get index of the one that has closest distance...
-    #         best_index_distances = np.argmin(distances)
-    #         # ... then find the index in all_individuals that corresponded to this
-    #         best_index = sampled_indices[best_index_distances]
-    #         # Delete it from the population
-    #         all_individuals = np.delete(all_individuals, best_index, axis=0)
-    #         # Increment counter to go to next round
-    #         counter += 1
 
     def round_robin_elimination(self, all_individuals):
         """Performs the round robin elimination."""
@@ -1554,7 +1354,6 @@ class r0708518:
             chosen = all_individuals[0]
             # Add the chosen individual to the population under construction
             self.population[counter] = chosen
-            # TODO - Delete it from the array?
             all_individuals = np.delete(all_individuals, 0, axis=0)
             # Failsafe: prevent a crash if length of all individuals drops below provided sample size:
             if len(all_individuals) < sample_size:
@@ -1581,7 +1380,6 @@ class r0708518:
     # --- LOCAL SEARCH --- #
     ########################
 
-    # @jit(forceobj=True)
     def lso(self, individual, depth=1, sample_size=10):
         """Performs a LSO. Individual contains genome but NOT the fitness."""
 
@@ -1674,6 +1472,7 @@ class r0708518:
                 depth -= 1
             return best_individual
 
+    @jit(forceobj=True)
     def insert(self, individual, i, j):
         """Takes element at index i, inserts it at index j"""
 
@@ -1730,7 +1529,7 @@ class r0708518:
             sample_size = round(self.lambdaa / 2)
 
         # Sample indices randomly, to get a sample of the population from this
-        sample_indices = np.random.choice(self.lambdaa, size=sample_size)
+        sample_indices = np.random.choice(self.lambdaa, size=sample_size, replace=False)
         sample = self.population[sample_indices]
 
         counter = 0
@@ -1758,9 +1557,8 @@ class r0708518:
 
     @jit(forceobj=True)
     def efficient_fitness(self, new, old=None, old_fitness=None):
-        """Implements a more efficient version of fitness calculation.
-			old, new: TSP tours.
-			old_fitness: fitness value of old tour (if provided)"""
+        """Implements a more efficient version of fitness calculation. old, new: TSP tours. old_fitness: fitness
+        value of old tour (if provided) """
 
         # In case we don't compare two genomes: just compute the fitness
         if new is None:
@@ -1795,9 +1593,6 @@ class r0708518:
     @jit(forceobj=True)
     def difference_fitness(self, old, new):
         """Computes the difference in fitness value between two genomes as efficiently as possible."""
-
-        # old = old.astype('int')
-        # new = new.astype('int')
 
         # Initialize difference variable:
         difference = 0
@@ -1839,6 +1634,23 @@ class r0708518:
     # --- HYPERPARAMS --- #
     #######################
 
+    def get_probabilities(self, size, distr="geom", param=0.4):
+        """Generates a numpy array of probabilities to select the entries of that numpy array. values: numpy array
+        containing the values for which we want to get probabilities distr: string indiciating which distribution
+        should be used for getting the probabilities. Default is the geometric distribution, which is a discrete
+        version of the exponential distribution. """
+
+        if distr not in self.implemented_probability_distributions:
+            distr = "geom"
+
+        # Geometric distribution:
+        if distr == "geom":
+            # Set the number of failures before the first success (k)
+            k = np.array([i for i in range(size)])
+            # Calculate the probabilities for each value of k using the geometric probability distribution
+            probabilities = param * (1 - param) ** (k - 1)
+            return probabilities / np.sum(probabilities)
+
     def interpolate_parameter(self, first_value, last_value):
         """Performs a linear interpolation between two extreme values for a parameter value"""
 
@@ -1851,13 +1663,17 @@ class r0708518:
     def save_hyperparams(self, save_name):
         """Saves the tunable parameters into a CSV file"""
 
-        param_names = ['lambdaa', 'mu', 'which_mutation', 'which_recombination', 'which_elimination', 'which_selection', 'first_tournament_size', 'last_tournament_size',
-                       'tournament_size', 'first_alpha', 'last_alpha', 'alpha', 'round_robin_size', 'random_perm_init_fraction',
+        param_names = ['lambdaa', 'mu', 'which_mutation', 'which_recombination', 'which_elimination', 'which_selection',
+                       'first_tournament_size', 'last_tournament_size',
+                       'tournament_size', 'first_alpha', 'last_alpha', 'alpha', 'round_robin_size',
+                       'random_perm_init_fraction',
                        'greedy_road_init_fraction', 'nnb_road_init_fraction', 'which_lso',
                        'lso_init_sample_size', 'lso_init_depth', 'lso_rec_sample_size', 'lso_rec_depth',
                        'lso_mut_sample_size', 'lso_mut_depth', 'lso_elim_sample_size', 'lso_elim_depth', 'lso_cooldown',
-                       'number_of_iterations', 'delta', 'no_improvement_max', 'which_metric', 'diversity_check_cooldown', 'diversity_threshold',
-                       'tournament_size_elimination', 'final_stage_lambdaa', 'final_stage_mu', 'diversity_sample_size', 'crowding_sample_size',
+                       'number_of_iterations', 'delta', 'no_improvement_max', 'which_metric',
+                       'diversity_check_cooldown', 'diversity_threshold',
+                       'tournament_size_elimination', 'final_stage_lambdaa', 'final_stage_mu', 'diversity_sample_size',
+                       'crowding_sample_size',
                        'lso_elim_percentage']
 
         param_dict = {}
@@ -1874,13 +1690,11 @@ class r0708518:
         array = np.transpose(array)
         np.savetxt(save_name, array, fmt="%s", delimiter=",")
 
-        # TODO - do we want to load hyperparams?
-        # loaded = np.loadtxt(save_name, delimiter=",", dtype="str")
-        test = pd.read_csv(save_name, header=None)
-        print(test)
+        loaded_values = pd.read_csv(save_name, header=None)
+        print(loaded_values)
 
     ####################
-    # --- PLOTTING --- #
+    # --- POST PROCESSING --- #
     ####################
 
     def make_diversity_plot(self, diversities, filename):
@@ -1909,8 +1723,8 @@ class r0708518:
         plt.savefig('Plots/' + plot_name + '.pdf', bbox_inches='tight')
         plt.close()
 
-
-    def make_fitness_plot(self, mean_fit_values, best_fit_values, filename, plot_mean=True, plot_name="plot_test_run", chop=None):
+    def make_fitness_plot(self, mean_fit_values, best_fit_values, filename, plot_mean=True, plot_name="plot_test_run",
+                          chop=None):
         # --- Plot the results
         # TODO - delete this at the end
         plt.figure(figsize=(7, 5))
@@ -1948,12 +1762,28 @@ class r0708518:
         plt.close()
 
 
+def run_tour50():
+    """Keeps on solving the tour 50 problem as much as possible."""
+    while True:
+        print("++++++++++++++++++++++++++++++")
+        params_dict = {"lso_cooldown": 200}
+        tsp = r0708518(params_dict)
+        start = time.time()
+        tsp.optimize('./tour50.csv')
+        end = time.time()
+        time_spent = abs(end - start)
+        # Save the time spent on this problem, according to the Reporter of TSP:
+        outFile = open("runtimes_t50.csv", "a")
+        outFile.write(str(time_spent)+"\n")
+        outFile.close()
 
 
 if __name__ == "__main__":
-    params_dict = {}
-    mytest = r0708518(params_dict)
-    # mytest.optimize('./tour250.csv')
-    # mytest.save_hyperparams("beat_all_rs0_final_hyperparams_v2.csv")
+
+    run_tour50()
+    # params_dict = {"lso_cooldown": 200}
+    # mytest = r0708518(params_dict)
+    # mytest.optimize('./tour50.csv')
+    # mytest.save_hyperparams("XXX.csv")
 
     pass

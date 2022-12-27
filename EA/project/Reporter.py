@@ -5,13 +5,17 @@ import time
 # Class to report basic results of an evolutionary algorithm
 class Reporter:
 
-    def __init__(self, filename):
+    def __init__(self, filename, timestamp=True):
         self.allowedTime = 300
         self.numIterations = 0
         self.filename = filename + ".csv"
         self.delimiter = ','
         self.startTime = time.time()
         self.writingTime = 0
+        # If we want to include a timestamp for the filename, add it here:
+        if timestamp:
+            start = time.time()
+            self.filename = self.filename + str(start) + ".csv"
         outFile = open(self.filename, "w")
         outFile.write("# Student number: " + filename + "\n")
         outFile.write("# Iteration, Elapsed time, Mean value, Best value, Cycle\n")
