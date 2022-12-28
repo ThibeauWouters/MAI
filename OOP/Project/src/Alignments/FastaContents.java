@@ -4,12 +4,19 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.*;
 
-final class ReadFasta {
-	private final ArrayList<String> ids = new ArrayList<String>();
+public class FastaContents {
+	// Create new arraylists to save the ids and genomes into
+	private final ArrayList<String> ids     = new ArrayList<String>();
 	private final ArrayList<String> genomes = new ArrayList<String>();
+	private HashMap<String, String> hmap    = new HashMap<String, String>();
 
-	public ReadFasta(String fileName) {
-		// Check if fileName corresponds to a FASTA file. If FASTA file, final 6 characters are ".fasta"
+	public String fileName;
+
+	public FastaContents(String fileName) {
+		// Save the filename for future convenience
+		this.fileName = fileName;
+		
+		// Check if fileName corresponds to a FASTA file (final 6 characters are ".fasta")
 		// TODO can we throw some exception for this?
 		String extension = fileName.substring(fileName.length()-6, fileName.length());
 		if (!(extension.equals(".fasta"))) {
@@ -22,7 +29,7 @@ final class ReadFasta {
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
 				try {
-					// Save identifier, but remove ">" at start
+					// Save identifier, but remove ">" at the start
 					String id = input.next();
 					id = id.substring(1);
 					this.ids.add(id);
@@ -47,7 +54,14 @@ final class ReadFasta {
 			System.out.println("Exiting program");
 			System.exit(0); 
 		}
+		
+		// Also save into the HashMap - this is how our "alignment" looks like
+		for(int i=0;i<ids.size();i++) {
+			this.hmap.put(ids.get(i), genomes.get(i));
+		}
 	}
+	
+	/* Getters */
 
 	public ArrayList<String> getIds() {
 		return this.ids;
@@ -57,5 +71,9 @@ final class ReadFasta {
 		return this.genomes;
 	}
 
+	public HashMap<String, String> getAlignment() {
+		return this.hmap;
+	}
+	
 }
 

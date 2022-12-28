@@ -2,48 +2,52 @@ package Alignments;
 
 import java.util.*;
 import java.util.Map.Entry;
-import java.io.*;
+//import java.io.*;
 
 public class StandardAlignment {
 
 	/* Variables */
-	// The identifiers and sequences will be stored in a hashmap. The keys are the identifiers,
-	// and the values will be the DNA sequences.
-	private HashMap<String, String> alignment = new HashMap<String, String>();
+	// The identifiers and sequences will be stored in a hashmap. The keys are the identifiers, the values will be the DNA sequences.
+	protected HashMap<String, String> alignment    = new HashMap<String, String>();
+	public final static Set<Character> NUCLEOTIDES = new HashSet<>(Arrays.asList('A', 'C', 'T', 'G', '.')); 
 
 
 	/* Constructor */
 
-	// Note: fileName should be a FASTA file.
-	public StandardAlignment(ArrayList<String> ids, ArrayList<String> genomes) {
-		// Is there a way to do it in one go?
-		for(int i=0;i<ids.size();i++) {
-			this.alignment.put(ids.get(i), genomes.get(i));
-		}
+	public StandardAlignment(FastaContents fasta) {
+		// Load the contents of the fasta file into the alignment:
+		this.alignment = fasta.getAlignment();
 	}
 
 	/* Methods */
 
 	public String getGenome(String identifier) {
 		// Get sequence with this identifier and return
-		// TODO - what if sequence is not there? void?
-		return this.alignment.get(identifier);
+		// Get the identifier of the given sequence in the alignment
+		// TODO - what to do if this fails? Return -1? Exit entirely?
+
+		if (this.getIdentifiers().contains(identifier)){
+			return this.alignment.get(identifier);
+		} else {
+			// TODO - how to handle this?
+			System.out.println("Sequence not found.");
+		}
+		return "-1";
 	}
 
 	public String getIdentifier(String sequence) {
 		// Get the identifier of the given sequence in the alignment
-		// TODO - what to do if this fails? Return nothing?
-		if (this.alignment.containsValue(sequence)){
+		// TODO - what to do if this fails? Return -1? Exit entirely?
+		if (this.getGenomes().contains(sequence)){
 			for(Entry<String, String> entry: this.alignment.entrySet()) {
 				// Return the key if it matches the desired sequence
-				if(entry.getValue() == sequence) {
-					String id = entry.getKey();
-					return id;
+				if(entry.getValue().equals(sequence)) {
+					return entry.getKey();
 				}
 			}
 		} else {
 			// TODO - how to handle this?
-			System.out.println("Sequence not found.");
+			System.out.println("Identifier not found.");
 		}
 		return "-1";
 	}
@@ -52,6 +56,7 @@ public class StandardAlignment {
 		/*
 		 * Returns the identifiers of the genomes which contain the given substring 
 		 */
+
 		// Create an empty arraylist of all ids
 		ArrayList<String> ids = new ArrayList<String>();
 
@@ -71,15 +76,16 @@ public class StandardAlignment {
 		// TODO: what if index not found, ie, the identifier is not recognized?
 		// TODO: what if sequence is not valid? Something different than A, C, T, G
 		// TODO: what if sequence is already there?
-		
+
 		this.alignment.remove(oldId);
 		this.alignment.put(newId, newSequence);
-		}
+	}
 
 	public void replaceSequenceGenome(String identifier, String oldSequence, String newSequence) {
-		// Make sure that the lengths of two sequences match, so that length of new genome is preserved
-		if(oldSequence.length() != newSequence.length()) {
-			System.out.println("replaceSequenceGenome was called with sequences of different length. No change");
+
+		// Check if the provided sequence is valid, otherwise don't change.
+		if (!isValidSequence(oldSequence, newSequence)){
+			System.out.println("replaceSequenceGenome was called with an invalid sequence. No change.");
 			return;
 		}
 
@@ -92,17 +98,21 @@ public class StandardAlignment {
 
 	public void replaceSequenceAlignment(String oldSequence, String newSequence) {
 		// TODO - weird behaviour
-		// Replace the sequence for all genomes in the alignment
-		this.alignment.forEach((id, genome) -> {
-			String newGenome = genome.replaceAll(oldSequence, newSequence);
-			// Store in alignment again
-			this.alignment.put(id, newGenome);
-		});
-		
-//		for(String identifier : this.alignment.keySet()) {
-//			System.out.println(identifier);
-//			this.replaceSequenceGenome(identifier, oldSequence, newSequence);
-//		}
+
+		/*
+		 * Call replaceSequenceGenome on each genome in the alignment:
+		 */
+
+		// Check if the provided sequence is valid, otherwise don't change.
+		if (!isValidSequence(oldSequence, newSequence)){
+			System.out.println("replaceSequenceGenome was called with an invalid sequence. No change.");
+			return;
+		}
+
+		// If valid, then change it everywhere
+		for (String id: this.getIdentifiers()) {
+			this.replaceSequenceGenome(id, oldSequence, newSequence);
+		}
 	}
 
 	public void addGenome(String identifier, String sequence) {
@@ -112,6 +122,39 @@ public class StandardAlignment {
 	public void removeGenome(String identifier) {
 		this.alignment.remove(identifier);
 	}
+
+	public static boolean isValidSequence(String sequence) {
+		/*
+		 * Checks whether or not a provided sequence is valid for a genome (i.e., only contains A, C, T, G)
+		 */
+
+		// Get all characters as an array
+		char[] allChars = sequence.toCharArray();
+
+		// Convert them to a set
+		Set<Character> setOfChars = new HashSet<>();
+		for (char c : allChars) {
+			setOfChars.add(c);
+		}
+
+		return NUCLEOTIDES.containsAll(setOfChars);
+	}
+
+	public static boolean isValidSequence(String oldSequence, String newSequence) {
+		/*
+		 * If two arguments are provided, check if length is preserved, then check if characters are valid.
+		 */
+
+		if(oldSequence.length() != newSequence.length()) {
+			System.out.println("Different length");
+			return false;
+		} else {
+			return isValidSequence(newSequence);
+		}
+	}
+
+
+	/* Getters and setters */
 
 	public int getSize() {
 		return this.alignment.size();
@@ -123,63 +166,60 @@ public class StandardAlignment {
 		return listOfKeys;
 	}
 
-	public ArrayList<String> getSequences() {
+	public ArrayList<String> getGenomes() {
 		ArrayList<String> listOfSequences = new ArrayList<>(this.alignment.values());
 		return listOfSequences;
 	}
 
-	/* Main method for testing -- TODO remove after code completion */
-	public static void main(String[] args) {
-		// Read the fasta file
-		ReadFasta rf = new ReadFasta("hiv.fasta");
-		
-		// Store them in the alignment
-		StandardAlignment sa = new StandardAlignment(rf.getIds(), rf.getGenomes());
-		System.out.println(sa.getIdentifiers());
+	public HashMap<String, String> getAlignment(){
+		return this.alignment;
+	}
 
-		System.out.println("Testing search genome");
-		ArrayList<String> test = sa.searchGenomes("AAAAAAAAAAAAAAAAAA");
-		System.out.println(test);
+	/* Methods to compute the difference score */
 
-		System.out.println("Testing add genome");
-		sa.addGenome("newID", "XXX");
-		System.out.println(sa.getGenome("newID"));
-		
-		System.out.println("Testing getting genome");
-		String test2 = sa.getGenome("2002.A.CD.02.KTB035");
-		System.out.println(test2);
-		
-		System.out.println("Testing getting id");
-		String test3 = sa.getIdentifier("XXX");
-		System.out.println(test3);
-		
-		System.out.println("Testing replacing genome");
-		sa.replaceGenome("newID", "newerID", "ZZZ");
-		System.out.println(sa.getGenome("newerID"));
-		
-		System.out.println("Testing replaceSequenceGenome");
-		sa.replaceSequenceGenome("2002.A.CD.02.KTB035", "A", "XXX");
-		System.out.println(sa.getGenome("2002.A.CD.02.KTB035"));
-		
-		System.out.println("Testing replaceSequenceGenome");
-		sa.replaceSequenceGenome("2002.A.CD.02.KTB035", "A", "X");
-		System.out.println(sa.getGenome("2002.A.CD.02.KTB035"));
-		
-		// TODO - this has some weird behaviour?
-//		System.out.println("Testing replaceSequence alignment");
-//		sa.replaceSequenceAlignment("A", "X");
-//		System.out.println(sa.getSequences());
-		
-		
-		System.out.println("Testing remove genome");
-		sa.removeGenome("heyheyhey");
+	public static int computeDifferenceScorePair(String firstGenome, String secondGenome) {
+		/*
+		 * Computes the difference between two genomes, i.e., the number of different positions/characters between them.
+		 */
+
+		int score = 0;
+
+		// Iterate over all characters of both genomes. If different, we add 1
+		for(int i = 0; i<firstGenome.length(); i++) {
+			if(firstGenome.charAt(i) != secondGenome.charAt(i)) {
+				score += 1;
+			}
 		}
+		
+		return score;
+	}
 
+	
+	public int getDifferenceScore(String referenceGenome) {
+		/*
+		 * Computes the difference score of this alignment. Saves it as instance variable.
+		 */
 
+		int score = 0;
 
-	/* Getters and setters etc */
+		// Iterate over all the genomes in this list
+		for (String genome : this.getGenomes()) {
+			score += computeDifferenceScorePair(referenceGenome, genome);
+		}
+		
+		return score;	
+	}
+	
 
-	//	public String getIdentifier
+	public int getDifferenceScore() {
+		/*
+		 * Same as above, but uses the first genome by default.
+		 */
+		
+		ArrayList<String> allGenomes = this.getGenomes();
+		String referenceGenome = allGenomes.get(0);
+		return getDifferenceScore(referenceGenome);
+	}
 
 
 }

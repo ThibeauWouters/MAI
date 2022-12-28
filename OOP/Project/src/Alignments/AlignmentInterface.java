@@ -3,6 +3,7 @@ package Alignments;
 import java.util.*;
 
 /**
+ * TODO - delete this, deprecated!!!!!
  * An abstract class dictating what alignments should have implemented.
  * @author thibe
  *

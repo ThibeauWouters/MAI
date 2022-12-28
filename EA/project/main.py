@@ -2024,7 +2024,7 @@ def run_tour50():
 if __name__ == "__main__":
 
     # --- Collect runs on tour50 for the histogram:
-    # run_tour50()
+    run_tour50()
 
     # --- Make plots for a collection of runs:
     # analyze_runs("tour1000")
@@ -2033,10 +2033,10 @@ if __name__ == "__main__":
     # mytest = r0708518()
     # mytest.optimize('./tour50.csv')
 
-    # --- Check performance across tours
+    # --- Check performance across tours - not discussed in the report
     # make_boxplots()
 
-    # --- Plot an interesting run, to discuss in the report:
-    load_and_plot("Runs/best_t1000_v1.csv", save_name="example_benefit_final_stage")
+    # --- Plot an interesting run, to discuss it in the report:
+    # load_and_plot("Runs/best_t1000_v1.csv", save_name="example_benefit_final_stage")
 
     pass
