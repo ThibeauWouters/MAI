@@ -11,7 +11,7 @@ import java.util.Scanner;
 public class Team {
 	
 	private String fileName;
-	ArrayList<Employee> team = new ArrayList<Employee>();
+	ArrayList<Employee> team = new ArrayList<Employee>();	
 	
 	public Team(String fileName, StandardAlignment sa) {
 		
@@ -27,7 +27,7 @@ public class Team {
 		}
 		
 		// TODO: is this ok in terms of getting the filepath etc?
-		System.out.println("Txt file entered: " + fileName); 
+		System.out.println("Teams file entered: " + fileName); 
 		// Scan all lines
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
@@ -59,7 +59,7 @@ public class Team {
 					}
 					
 					// Add this new employee to the team
-					this.team.add(newEmployee);
+					this.addEmployee(newEmployee);
 					
 				} catch (InputMismatchException mismatch) {
 					// In case the input is invalid:
@@ -88,9 +88,9 @@ public class Team {
 		return this.fileName;
 	}
 	
-	public void remove(String name) {
+	public void removeEmployee(String name) {
 		/*
-		 * Remove an employee from the team. Assume every name (first + last) is unique.
+		 * Remove an employee from the team, given the name. Assume every name (first + last) is unique.
 		 */
 		
 		// Iterate over current employees in the team:
@@ -103,22 +103,58 @@ public class Team {
 		}
 	}
 	
-	public void add(Employee empl) {
+	public void removeEmployee(Employee employee) {
 		/*
-		 * Add an employee to the team.
+		 * Remove an employee from the team, given the object.
 		 */
+		
+		// Iterate over current employees in the team:
+		String name = employee.getName();
+		this.removeEmployee(name);
+	}
+	
+	public void addEmployee(Employee empl) {
+		// Add an Employee Object to the team
 		
 		System.out.println("Welcome to the team, " + empl.getName());
 		this.team.add(empl);
 	}
 	
+	public ArrayList<Employee> getTeam(){
+		return this.team;
+	}
+	
 	public void listTeamMembers() {
 		// Iterate over current employees in the team:
-		for (Employee empl : this.team) {
+		for (Employee empl : this.getTeam()) {
 			System.out.println("Employee name: " + empl.getName());
 			System.out.println("Employee type: " + empl.getEmployeeType());
 			System.out.println("Years of experience: " + empl.getYearsOfExperience());
-			
+		}
+	}
+	
+	public ArrayList<AlignmentEditor> getEditors(){
+		// Creates an ArrayList of all the editors of the current team
+		
+		// Create empty list
+		ArrayList<AlignmentEditor> result = new ArrayList<AlignmentEditor>();
+		
+		// Fill it: iterate over members, save the editors:
+		for (Employee employee : this.getTeam()) {
+			if (employee instanceof AlignmentEditor) {
+				AlignmentEditor editor = (AlignmentEditor) employee;
+				result.add(editor);
+			}
+		}
+		return result;
+	}
+	
+	public void listEditors() {
+		// Iterate over current employees in the team:
+		for (Employee empl : this.getEditors()) {
+			System.out.println("Employee name: " + empl.getName());
+			System.out.println("Employee type: " + empl.getEmployeeType());
+			System.out.println("Years of experience: " + empl.getYearsOfExperience());
 		}
 	}
 

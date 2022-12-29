@@ -17,7 +17,6 @@ public class TestSNiPAlignment {
 		System.out.println("Check the reference genome");
 		System.out.println(sa.getReferenceGenome());
 		System.out.println(su.getGenome("2002.A.CD.02.KTB035"));
-		System.out.println(sa.getGenome("2002.A.CD.02.KTB035"));
 		
 		System.out.println("---------------------");
 		System.out.println("Testing difference score. Before computing:");
@@ -30,12 +29,14 @@ public class TestSNiPAlignment {
 		
 		System.out.println("---------------------");
 		System.out.println("Testing search genome");
-		ArrayList<String> test = sa.searchGenomes("TTTTTT");
+		ArrayList<String> test = sa.searchGenomes("AAAAAAA");
 		System.out.println(test);
 
 		System.out.println("---------------------");
 		System.out.println("Testing add genome");
+		System.out.println(sa.getSize());
 		sa.addGenome("newID", "XXX");
+		System.out.println(sa.getSize());
 		System.out.println(sa.getGenome("newID"));
 
 		System.out.println("---------------------");

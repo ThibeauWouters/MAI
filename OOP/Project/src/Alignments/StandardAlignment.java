@@ -2,13 +2,12 @@ package Alignments;
 
 import java.util.*;
 import java.util.Map.Entry;
-//import java.io.*;
 
-public class StandardAlignment {
+public class StandardAlignment extends Alignment {
 
 	/* Variables */
 	// The identifiers and sequences will be stored in a hashmap. The keys are the identifiers, the values will be the DNA sequences.
-	protected HashMap<String, String> alignment    = new HashMap<String, String>();
+	private HashMap<String, String> alignment      = new HashMap<String, String>();
 	public final static Set<Character> NUCLEOTIDES = new HashSet<>(Arrays.asList('A', 'C', 'T', 'G', '.')); 
 
 
@@ -18,6 +17,28 @@ public class StandardAlignment {
 		// Load the contents of the fasta file into the alignment:
 		this.alignment = fasta.getAlignment();
 	}
+	
+	public StandardAlignment(HashMap<String, String> hmap) {
+		// Load the contents of the fasta file into the alignment:
+		this.setAlignment(hmap);
+	}
+	
+	public StandardAlignment(SNiPAlignment snip) {
+		// For each ID in the SNIP, recreate the original genome before storing
+		
+		// Copy the alignment
+		this.alignment = snip.getAlignment();
+		
+		// Then edit back such that we have genome rather than difference
+		for (String id : snip.getIdentifiers()) {
+			String difference = snip.getGenome(id);
+			String genome = snip.getOriginalGenome(difference);
+//			System.out.println(genome);
+			this.alignment.replace(id, genome);
+		}
+	}
+	
+	public StandardAlignment() {};
 
 	/* Methods */
 
@@ -27,7 +48,7 @@ public class StandardAlignment {
 		// TODO - what to do if this fails? Return -1? Exit entirely?
 
 		if (this.getIdentifiers().contains(identifier)){
-			return this.alignment.get(identifier);
+			return alignment.get(identifier);
 		} else {
 			// TODO - how to handle this?
 			System.out.println("Sequence not found.");
@@ -79,6 +100,11 @@ public class StandardAlignment {
 
 		this.alignment.remove(oldId);
 		this.alignment.put(newId, newSequence);
+	}
+
+	public void replaceGenome(String oldId, String newSequence) {
+
+		this.replaceGenome(oldId, oldId, newSequence);
 	}
 
 	public void replaceSequenceGenome(String identifier, String oldSequence, String newSequence) {
@@ -157,7 +183,7 @@ public class StandardAlignment {
 	/* Getters and setters */
 
 	public int getSize() {
-		return this.alignment.size();
+		return alignment.size();
 	}
 
 	public ArrayList<String> getIdentifiers() {
@@ -173,6 +199,10 @@ public class StandardAlignment {
 
 	public HashMap<String, String> getAlignment(){
 		return this.alignment;
+	}
+	
+	public void setAlignment(HashMap<String, String> alignment){
+		this.alignment = alignment;
 	}
 
 	/* Methods to compute the difference score */
@@ -199,7 +229,7 @@ public class StandardAlignment {
 		/*
 		 * Computes the difference score of this alignment. Saves it as instance variable.
 		 */
-
+		
 		int score = 0;
 
 		// Iterate over all the genomes in this list

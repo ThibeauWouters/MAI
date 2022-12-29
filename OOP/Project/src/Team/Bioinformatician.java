@@ -2,19 +2,17 @@ package Team;
 
 import Alignments.*;
 
-public class Bioinformatician extends Employee {
-
+public class Bioinformatician extends AlignmentEditor {
 	
 	/* Variables */
-	StandardAlignment alignment; 
+	// Additional variables could appear here . . .
 	
 	/* Constructor */
 	
 	public Bioinformatician(String firstName, String lastName, int yearsOfExperience, StandardAlignment sa) {
-		super("Bioinformatician", firstName, lastName, yearsOfExperience);
-		this.alignment = sa;
+		super("Bioinformatician", firstName, lastName, yearsOfExperience, sa);
 	}
 	
-	/* Methods */
+	// Add functionalities in the future
 	
 }

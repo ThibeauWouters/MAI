@@ -29,6 +29,7 @@ public class FastaContents {
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
 				try {
+					// TODO - how to check when ">" at the start or not?
 					// Save identifier, but remove ">" at the start
 					String id = input.next();
 					id = id.substring(1);
@@ -63,7 +64,7 @@ public class FastaContents {
 	
 	/* Getters */
 
-	public ArrayList<String> getIds() {
+	public ArrayList<String> getIdentifiers() {
 		return this.ids;
 	}
 

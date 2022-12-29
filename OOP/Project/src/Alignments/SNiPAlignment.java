@@ -1,46 +1,108 @@
 package Alignments;
 
 import java.util.ArrayList;
-
-//import java.util.HashMap;
+import java.util.HashMap;
 
 public class SNiPAlignment extends StandardAlignment {
 	
 	/* Variables */ 
+	private HashMap<String, String> alignment = new HashMap<String, String>();
 	private String referenceGenome;
-	private String referenceIdentifier;
+	private String referenceID;
 
 	/*  Constructors */
 	
 	// Reference ID is the identifier for the genome that is the reference sequence for constructing this alignment
+	
+	// Option 1 - create from FASTA file
 	public SNiPAlignment(FastaContents fasta, String referenceID) {
 		// TODO - what if we want to CHANGE the reference genome? (Not good to change the whole alignment call new one?)
 		// TODO - what if the reference ID is not present in the alignment?
 		
-		// Call super constructor, create a standard alignment first
+		// Create standard alignment first
 		super(fasta);
 		
-		// Get the reference genome from super. Save it to the instance to refer to it later on
+		// Get the reference genome from FASTA. Save it to the instance to refer to it later on
 		String referenceGenome = super.getAlignment().get(referenceID);
 		this.referenceGenome = referenceGenome;
 		// Also save the ID we used, to find it again later on:
-		this.referenceIdentifier = referenceID;
-
-		// Iterate over each (identifier, genome)-pair in the standard alignment, and replace genome with the "difference". 
-		for (String id: this.getIdentifiers()) {
-			String genome = this.getGenome(id);
-			String difference = getGenomeDifference(genome);
-			this.alignment.replace(id, difference);
-		}
+		this.referenceID = referenceID;
 		
-		// Set the difference score of this alignment:
-		//this.setDifferenceScore();
+		// Edit the entries to get differences rather than 
+		for (String id : this.getIdentifiers()) {
+			String genome = this.getGenome(id);
+			String difference = this.getGenomeDifference(genome);
+			this.replaceGenome(id, difference);
+		}
 	}
+	
+	// Same as above, but with default for referenceID
 
-	public SNiPAlignment(FastaContents fasta) {
-		// Second constructor: if no reference ID was specified, take first one present in Fasta file.
-		this(fasta, fasta.getIds().get(0));
+	public SNiPAlignment(FastaContents fasta) {		
+		this(fasta, fasta.getIdentifiers().get(0));
 	}
+	
+	// Option 2 - create from given HashMap
+	public SNiPAlignment(HashMap<String, String> hmap, String referenceID) {
+		// TODO - what if we want to CHANGE the reference genome? (Not good to change the whole alignment call new one?)
+		// TODO - what if the reference ID is not present in the alignment?
+		
+		// Create standard alignment first
+		super(hmap);
+		
+		// Get the reference genome from FASTA. Save it to the instance to refer to it later on
+		String referenceGenome = super.getAlignment().get(referenceID);
+		this.referenceGenome = referenceGenome;
+		// Also save the ID we used, to find it again later on:
+		this.referenceID = referenceID;
+		
+		// Edit the entries to get differences rather than 
+		for (String id : this.getIdentifiers()) {
+			String genome = this.getGenome(id);
+			String difference = this.getGenomeDifference(genome);
+			this.replaceGenome(id, difference);
+		}
+	}
+	
+	public SNiPAlignment(HashMap<String, String> hmap) {		
+		this(hmap, hmap.keySet().iterator().next());
+	}
+	
+	
+	// Second option: build from a given standard alignment
+	
+//	public SNiPAlignment(StandardAlignment sa, String referenceID) {
+//		// Create standard alignment first
+//		super(sa.getAlignment());
+//		
+//		// Get the reference genome from FASTA. Save it to the instance to refer to it later on
+//		String referenceGenome = sa.getGenome(referenceID);
+//		this.referenceGenome = referenceGenome;
+//		// Also save the ID we used, to find it again later on:
+//		this.referenceID = referenceID;
+//		
+//		// Construct the alignment
+//		for (String id : sa.getIdentifiers()) {
+//			String genome = sa.getGenome(id);
+//			this.replaceGenome(id, genome);
+//		}
+//	}
+	
+//	public SNiPAlignment(StandardAlignment sa) {
+//		// Same as above, but use the first ID as reference by default
+//		this(sa, sa.getIdentifiers().get(0));
+//	}
+	
+//	public SNiPAlignment(SNiPAlignment snip) {
+//		
+//		super(snip);
+//		
+//		// Construct a copy from a given, existing SNiPAlignment
+//		this.referenceGenome = snip.getReferenceGenome();
+//		this.referenceID     = snip.getReferenceID();
+//		this.alignment       = snip.getAlignment();
+//	}
+	
 
 	/* Methods */
 	
@@ -48,6 +110,7 @@ public class SNiPAlignment extends StandardAlignment {
 		/*
 		 * Edits a single genome (in standard alignment) and gets the differences in the sequences compared to a reference genome for SNiP alignment.
 		 */
+		
 		// TODO - check if equal length
 		
 		// Construct a string containing the differences
@@ -79,7 +142,7 @@ public class SNiPAlignment extends StandardAlignment {
 		// Construct a string containing the differences
 		String original = "";
 		// Iterate over all characters. If a dot, add char of reference genome, otherwise add char "difference" string
-		for(int i = 0; i<referenceGenome.length(); i++) {
+		for (int i = 0; i<referenceGenome.length(); i++) {
 			if(difference.charAt(i) == '.') {
 				original += referenceGenome.charAt(i);
 			} else {
@@ -140,13 +203,10 @@ public class SNiPAlignment extends StandardAlignment {
 	
 	@Override
 	public void replaceGenome(String oldId, String newId, String newSequence) {
-		
-		// Remove old genome sequence from the alignment
-		this.alignment.remove(oldId);
 		// Get the difference with the reference genome
 		String differenceSequence = getGenomeDifference(this.referenceGenome, newSequence);
 		// Add this 'difference genome' to the alignment
-		this.alignment.put(newId, differenceSequence);
+		super.replaceGenome(oldId, newId, differenceSequence);
 	}
 
 	@Override
@@ -154,7 +214,7 @@ public class SNiPAlignment extends StandardAlignment {
 		// First, get the difference, 
 		String difference = this.getGenomeDifference(sequence);
 		// then, add to alignment
-		this.alignment.put(identifier, difference);
+		alignment.put(identifier, difference);
 	}
 	
 	@Override
@@ -163,13 +223,17 @@ public class SNiPAlignment extends StandardAlignment {
 		 * We override, as we are going to use the reference genome used in constructing the SNiP to compute the difference score.
 		 */
 		
-		return super.getDifferenceScore(this.getGenome(this.referenceIdentifier));
+		return super.getDifferenceScore(this.getGenome(this.getReferenceID()));
 	}
 	
 	/* Getters and setters */
 	
 	public String getReferenceGenome() {
 		return this.referenceGenome;
+	}
+
+	public String getReferenceID() {
+		return referenceID;
 	}
 
 }
