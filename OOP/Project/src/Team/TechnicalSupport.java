@@ -1,17 +1,14 @@
-package Team;
+package team;
 
-//import java.io.BufferedWriter;
-//import java.io.FileNotFoundException;
-//import java.io.FileWriter;
-//import java.io.IOException;
 import java.time.LocalDateTime;
-
-import Alignments.*;
+import datastructures.*;
+import team.editors.Editor;
 
 public class TechnicalSupport extends Employee {
 	
 	/* Variables */
-	private String backupTimestamp = "No backup created yet.";
+	private String backupTimestamp;
+	private String backupString;
 	
 	/* Constructor */
 	
@@ -26,20 +23,17 @@ public class TechnicalSupport extends Employee {
 		
 		// Get a timestamp when creating the backup. Store as instance variable.
 		String timeStamp = getDateAndTime();
-		this.backupTimestamp = timeStamp;
+		this.setBackupTimestamp(timeStamp);
 		
 		// Create the fileName
-
-		String folderName = "src/Backups/";
-		String fileName = folderName + this.getFirstName() + "_" + this.getLastName() + ".backup.txt";
+		String fileName = this.getFirstName() + "_" + this.getLastName() + ".backup.txt";
 		System.out.println("Saving backup to " + fileName);
 		
 		// Do the backup in Repository class
-		repo.backup(this, fileName);
+		repo.backup(this);
 	}
 	
 	public void loadBackup(String fileName, Repository repo) {
-		
 		repo.load(this, fileName);
 	}
 	
@@ -54,15 +48,42 @@ public class TechnicalSupport extends Employee {
 	}
 	
 	public void setBackupTimestamp(String backupTimestamp) {
+		// Update the backupTimeStamp
 		this.backupTimestamp = backupTimestamp;
+		// Update the backup string, which uses backupTimeStamp
+		this.updateBackupString();
 	}
 	
+	private void updateBackupString() {
+		// If the backupTimeStamp is changed, this method is called, and changes the backup string
+		this.backupString = this.getFirstName() + "_" + this.getLastName() + ".backup.";
+	}
+
 	public void displayBackupTimestamp() {
-		System.out.println(this.getName() + " has made his/her last backup at " + this.getBackupTimestamp());
+		if (this.backupString == null) {
+			System.out.println(this.getName() + " has not made backups yet.");
+		} else {
+			System.out.println(this.getName() + " has made his/her last backup at " + this.getBackupTimestamp());
+		}
+		
 	}
 
 	public static String getDateAndTime() {
 		// Finds and returns the current date and time as a String
 		return LocalDateTime.now().toString();
+	}
+
+	public String getBackupString() {
+		return backupString;
+	}
+	
+	/* Methods to create fileNames to create backup files */
+	
+	public String getBackupString(Editor editor) {
+		return backupString + editor.getFirstName() + "_" + editor.getLastName() + ".txt";
+	}
+	
+	public String getBackupString(String str) {
+		return backupString + str + ".txt";
 	}
 }

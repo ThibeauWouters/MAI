@@ -1,4 +1,4 @@
-package Alignments;
+package alignments;
 
 import java.util.ArrayList;
 
@@ -10,7 +10,7 @@ public class TestSNiPAlignment {
 
 		// Store them in the alignment
 		StandardAlignment su = new StandardAlignment(hiv);
-		SNiPAlignment sa = new SNiPAlignment(hiv, "2002.A.CD.02.KTB035");
+		SNiPAlignment sa     = new SNiPAlignment(hiv, "2002.A.CD.02.KTB035");
 		
 		/* All tests come here */
 		System.out.println("---------------------");
@@ -90,6 +90,12 @@ public class TestSNiPAlignment {
 		System.out.println("After:");
 		System.out.println(sa.getGenome(sa.getIdentifiers().get(40)));
 
+		System.out.println("---------------------");
+		System.out.println("Testing constructors");
+		StandardAlignment standard = new StandardAlignment(sa);
+		SNiPAlignment snip = new SNiPAlignment(sa);
+		System.out.println(standard.getGenome(standard.getIdentifiers().get(0)));
+		System.out.println(snip.getGenome(snip.getIdentifiers().get(0)));
 	}
 
 }

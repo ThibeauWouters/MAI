@@ -1,12 +1,14 @@
-package Team;
-
-import Alignments.*;
+package team;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.InputMismatchException;
 import java.util.Scanner;
+
+import alignments.*;
+import team.editors.Bioinformatician;
+import team.editors.Editor;
 
 public class Team {
 	
@@ -27,7 +29,8 @@ public class Team {
 		}
 		
 		// TODO: is this ok in terms of getting the filepath etc?
-		System.out.println("Teams file entered: " + fileName); 
+//		System.out.println("Teams file entered: " + fileName);
+		
 		// Scan all lines
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
@@ -115,8 +118,6 @@ public class Team {
 	
 	public void addEmployee(Employee empl) {
 		// Add an Employee Object to the team
-		
-		System.out.println("Welcome to the team, " + empl.getName());
 		this.team.add(empl);
 	}
 	
@@ -124,38 +125,81 @@ public class Team {
 		return this.team;
 	}
 	
-	public void listTeamMembers() {
+	public void displayTeamMembers() {
 		// Iterate over current employees in the team:
 		for (Employee empl : this.getTeam()) {
-			System.out.println("Employee name: " + empl.getName());
-			System.out.println("Employee type: " + empl.getEmployeeType());
-			System.out.println("Years of experience: " + empl.getYearsOfExperience());
+			System.out.println("Employee name:    " + empl.getName());
+			System.out.println("Employee type:    " + empl.getEmployeeType());
+			System.out.println("Experience (yrs): " + empl.getYearsOfExperience());
 		}
 	}
 	
-	public ArrayList<AlignmentEditor> getEditors(){
+	/* Getters to return specific employee types */
+	
+	// Note: the methods below are mainly for illustration purposes in the main method
+	
+	public ArrayList<Editor> getEditors(){
 		// Creates an ArrayList of all the editors of the current team
 		
 		// Create empty list
-		ArrayList<AlignmentEditor> result = new ArrayList<AlignmentEditor>();
+		ArrayList<Editor> result = new ArrayList<Editor>();
 		
 		// Fill it: iterate over members, save the editors:
 		for (Employee employee : this.getTeam()) {
-			if (employee instanceof AlignmentEditor) {
-				AlignmentEditor editor = (AlignmentEditor) employee;
+			if (employee instanceof Editor) {
+				Editor editor = (Editor) employee;
 				result.add(editor);
 			}
 		}
 		return result;
 	}
 	
-	public void listEditors() {
-		// Iterate over current employees in the team:
-		for (Employee empl : this.getEditors()) {
-			System.out.println("Employee name: " + empl.getName());
-			System.out.println("Employee type: " + empl.getEmployeeType());
-			System.out.println("Years of experience: " + empl.getYearsOfExperience());
+	public ArrayList<Bioinformatician> getBioinformaticians(){
+		// Creates an ArrayList of all the editors of the current team
+		
+		// Create empty list
+		ArrayList<Bioinformatician> result = new ArrayList<Bioinformatician>();
+		
+		// Fill it: iterate over members, save the editors:
+		for (Employee employee : this.getTeam()) {
+			if (employee instanceof Bioinformatician) {
+				Bioinformatician editor = (Bioinformatician) employee;
+				result.add(editor);
+			}
 		}
+		return result;
+	}
+	
+	public ArrayList<TeamLead> getTeamLeads(){
+		// Creates an ArrayList of all the editors of the current team
+		
+		// Create empty list
+		ArrayList<TeamLead> result = new ArrayList<TeamLead>();
+		
+		// Fill it: iterate over members, save the editors:
+		for (Employee employee : this.getTeam()) {
+			if (employee instanceof TeamLead) {
+				TeamLead editor = (TeamLead) employee;
+				result.add(editor);
+			}
+		}
+		return result;
+	}
+	
+	public ArrayList<TechnicalSupport> getTechnicalSupports(){
+		// Creates an ArrayList of all the editors of the current team
+		
+		// Create empty list
+		ArrayList<TechnicalSupport> result = new ArrayList<TechnicalSupport>();
+		
+		// Fill it: iterate over members, save the editors:
+		for (Employee employee : this.getTeam()) {
+			if (employee instanceof TechnicalSupport) {
+				TechnicalSupport editor = (TechnicalSupport) employee;
+				result.add(editor);
+			}
+		}
+		return result;
 	}
 
 }

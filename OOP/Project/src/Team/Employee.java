@@ -1,4 +1,4 @@
-package Team;
+package team;
 
 public class Employee {
 	

@@ -1,4 +1,4 @@
-package Alignments;
+package alignments;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -17,22 +17,18 @@ public class FastaContents {
 		this.fileName = fileName;
 		
 		// Check if fileName corresponds to a FASTA file (final 6 characters are ".fasta")
-		// TODO can we throw some exception for this?
-		String extension = fileName.substring(fileName.length()-6, fileName.length());
-		if (!(extension.equals(".fasta"))) {
-			System.out.println("Alignment constructor takes .fasta files only. Exiting constructor.");
-			System.exit(0);
-		}
+		// TODO - check file extensions properly
+//		String extension = fileName.substring(fileName.length()-6, fileName.length());
+//		if (!(extension.equals(".fasta"))) {
+//			System.out.println("Alignment constructor takes .fasta files only. Exiting constructor.");
+//			System.exit(0);
+//		}
 		// TODO: is this ok in terms of getting the filepath etc?
-		System.out.println("FASTA file entered: " + fileName); 
-		// Scan all lines, add the identifier and genome sequence to respective ArrayLists.
+
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
 				try {
-					// TODO - how to check when ">" at the start or not?
-					// Save identifier, but remove ">" at the start
 					String id = input.next();
-					id = id.substring(1);
 					this.ids.add(id);
 					// Save genome
 					String seq = input.next();

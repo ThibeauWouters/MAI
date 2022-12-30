@@ -4,6 +4,7 @@ import pandas as pd
 import csv
 import random
 import matplotlib.pyplot as plt
+import seaborn as sns
 import time
 import sys
 from math import floor
@@ -1719,14 +1720,10 @@ class r0708518:
     def make_diversity_plot(self, diversities, filename):
         cooldown = self.diversity_check_cooldown
         # --- Plot the diversity observed during the run
-        # TODO - delete this at the end
-        # start = len(diversities) // 20
         start = 0
         remainder = diversities[start:]
         xt = [start + i * cooldown for i in range(len(remainder))]
         plt.plot(xt, remainder, '--o', ms=4, color='red', label="Diversity")
-        # plt.axhline(0, color='black')
-        # plt.axhline(1, color='black')
         plt.axhline(self.diversity_threshold, ls='--', color='black', label="Threshold")
         plt.ylim(0, 1)
         plt.grid()
@@ -1734,7 +1731,6 @@ class r0708518:
         plt.xlabel('Iteration step')
         plt.ylabel('Average Hamming distance (sampled)')
         plt.title('Diversity during algorithm for ' + str(filename))
-        # plot_name = "plot_mut_" + self.which_mutation + "_rec_" + self.which_recombination
         plot_name = "plot_diversities"
         # Save the plots (as PNG and PDF)
         plt.savefig('Plots/' + plot_name + '.png', bbox_inches='tight')
@@ -1880,11 +1876,19 @@ def load_and_plot(filename, save_name="test_", seconds=None):
     # print("Best value for this run was %0.2f" % best[-1])
 
 
-def analyze_runs(which_tour="tour50"):
-    """Loads in all runs performed for a tour, and analyzes them."""
+def analyze_runs(which_tour="tour50", use_all=False):
+    """Loads in all runs performed for a certain tour, and analyzes them."""
 
-    # Get the relevant Reporter CSV files
-    folder_name = "./Runs/" + which_tour + "/"
+    # Decide if we want to check all 1000 runs for t50 or not. If not t50, set use_all to False
+    if which_tour != "tour50":
+        use_all = False
+
+    # Get the relevant CSV files
+    if use_all:
+        folder_name = "./Runs/all" + which_tour + "/"
+    else:
+        folder_name = "./Runs/" + which_tour + "/"
+
     all_filenames = [(folder_name + f) for f in listdir(folder_name) if isfile(join(folder_name, f))]
 
     # Get the heuristic value (in case it is one of the benchmark problems)
@@ -1935,28 +1939,54 @@ def analyze_runs(which_tour="tour50"):
     best_cycle = all_cycles[best_index]
     best_file = all_filenames[best_index]
     
-    print("The best fitness value observed was %0.2f, for file %s" %(best_best, best_file))
+    print("The best fitness value observed was %0.2f, for file %s" % (best_best, best_file))
     print("This best tour was:")
-    print(best_cycle)
+    best_individual = best_cycle.astype('int')
+    print(best_individual)
+    np.savetxt("Runs/best_t50_individual.csv", best_individual)
     
     # Plot the best run as well:
     load_and_plot(best_file, save_name="best_" + which_tour + "_run_")
 
-    # For tour 50, also make a histogram
     if which_tour == "tour50":
-        # Make the histogram
-        plt.hist(all_best)
+        data_dict = {"Best": all_best, "Elapsed": all_elapsed}
+        df = pd.DataFrame(data_dict)
+        df.to_csv("Runs/all_t50_data.csv")
 
-        # Make pretty
-        plt.grid()
-        plt.xlabel("Best fitness")
-        plt.title("Histogram of best fitness values for tour50")
-        plt.savefig('Plots/histogram_t50_runs.png', bbox_inches='tight')
-        plt.savefig('Plots/histogram_t50_runs.pdf', bbox_inches='tight')
-        plt.close()
-    print("Done")
+def make_t50_histogram(filename="Runs/all_t50_data.csv"):
 
-def make_boxplots():
+    # Read CSV and write important results
+    df = pd.read_csv(filename)
+    best    = df["Best"]
+    elapsed = df["Elapsed"]
+
+    avg_fit     = np.mean(best)
+    std_fit     = np.std(best)
+    avg_elapsed = np.mean(elapsed)
+    std_elapsed = np.std(elapsed)
+
+    print(u"Average best fitness of all runs: %0.2f \u00B1 %0.2f " % (avg_fit, std_fit))
+    print(u"Average elapsed time of all runs: (%0.2f \u00B1 %0.2f) seconds " % (avg_elapsed, std_elapsed))
+
+    print("Highest fitness value was %0.2f" % np.max(best))
+    print("Lowset  fitness value was %0.2f" % np.min(best))
+
+    # Make the histogram
+    # plt.hist(best, bins=9, color='red', zorder=10000)
+    plt.figure()
+    sns.histplot(best, bins=16, color='red', zorder=10, stat='density')
+    sns.kdeplot(best, color='black', zorder=99, lw=3)
+
+    # Make pretty
+    plt.grid()
+    plt.xlabel("Best fitness")
+    plt.ylabel("Density")
+    plt.title("Histogram of best fitness values for tour50")
+    plt.savefig('Plots/Project plots/histogram_t50_runs.png', bbox_inches='tight')
+    plt.savefig('Plots/Project plots/histogram_t50_runs.pdf', bbox_inches='tight')
+    plt.close()
+
+def make_performance_boxplots():
     """Create boxplots of the runs for t100, t500 and t1000 to compare the EAs performance."""
     bp_list = []
     # Create the boxplots
@@ -2011,26 +2041,24 @@ def run_tour50():
         print("++++++++++++++++++++++++++++++")
         params_dict = {"lso_cooldown": 200}
         tsp = r0708518(params_dict)
-        start = time.time()
         tsp.optimize('./tour50.csv')
-        end = time.time()
-        time_spent = abs(end - start)
-        # Save the time spent on this problem, according to the Reporter of TSP:
-        outFile = open("runtimes_t50.csv", "a")
-        outFile.write(str(time_spent)+"\n")
-        outFile.close()
 
 
 if __name__ == "__main__":
 
-    # --- Collect runs on tour50 for the histogram:
-    run_tour50()
+    # --- Analyze runs for t50
+    start = time.time()
+    analyze_runs(use_all=True)
+    end = time.time()
+    print("Reading all 1000 files took %0.0f seconds" % (end-start))
+    make_t50_histogram()
 
     # --- Make plots for a collection of runs:
     # analyze_runs("tour1000")
 
     # --- Run the TSP solver on a single instance
-    # mytest = r0708518()
+    # params_dict = {}
+    # mytest = r0708518(params_dict)
     # mytest.optimize('./tour50.csv')
 
     # --- Check performance across tours - not discussed in the report
@@ -2038,5 +2066,15 @@ if __name__ == "__main__":
 
     # --- Plot an interesting run, to discuss it in the report:
     # load_and_plot("Runs/best_t1000_v1.csv", save_name="example_benefit_final_stage")
+
+    # --- Show the best solution that we found for t50, and also re-compute its fitness
+    # best_tour50_individual = np.loadtxt("Runs/best_t50_individual.csv")
+    # print("Best individual found for t50:")
+    # print(best_tour50_individual)
+    # params_dict = {"number_of_iterations": 2}
+    # mytest = r0708518(params_dict)
+    # mytest.optimize('./tour50.csv')
+    # best_ever_fit = mytest.fitness(best_tour50_individual)
+    # print("His fitness was %d" % round(best_ever_fit))
 
     pass
