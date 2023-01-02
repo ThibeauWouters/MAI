@@ -16,7 +16,7 @@ plt.rcParams['figure.figsize'] = (15, 5)
 def analyze_operators():
     """Estimates the performance of selected crossover and mutation operators through experiments on tour50."""
 
-    all_recombinations = ["PMX", "SCX", "OX", "OX2", "AX"]
+    all_recombinations = ["random"]
 
     for rec in all_recombinations:
         counter = 0
@@ -134,7 +134,7 @@ def discuss_performance_rec_operators():
 
     # Plot the figure
     fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True)
-    ax1.set_title("Performance of recombination operators (average of 10)")
+    ax1.set_title("Performance of recombination operators (average of 10 on tour750)")
     bp_list = []
     # Create the boxplots for fitness values
     for i, key in enumerate(operator_names):
@@ -156,7 +156,9 @@ def discuss_performance_rec_operators():
     plt.subplot(212)
     # Plot iterations values
     x = [i for i in range(len(average_iterations))]
-    plt.errorbar(x, average_iterations,  yerr=std_iterations, color='red', barsabove=True, fmt='o', markersize=6, capsize=6, linewidth=3)
+    plt.errorbar(x, average_iterations, yerr=std_iterations, color='red', barsabove=True, fmt='o', markersize=6,
+                 capsize=6, linewidth=3)
+
     # plt.title("Best values (average of 10)")
     plt.xticks([i for i in range(len(operator_names))], labels=operator_names)
     plt.xlabel("Recombination operator")
@@ -306,6 +308,6 @@ if __name__ == "__main__":
     # mytest = main.r0708518(params_dict)
     # mytest.optimize('./tour250.csv')
 
-    discuss_performance_rec_operators()
+    # discuss_performance_rec_operators()
     # analyze_operators()
     pass

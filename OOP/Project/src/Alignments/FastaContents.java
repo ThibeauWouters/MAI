@@ -4,26 +4,41 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.*;
 
+
+/**
+ * This is a class used to read in the contents of a .fasta file and store it as instance variables
+ * such that the contents can be processed by other classes. All its fields are finals, as we are not 
+ * going to modify the variables stored there after a .fasta file has been read. We note that other file
+ * extensions, such as .txt, are also allowed, and hence we reuse this class when reading in backup files. 
+ * 
+ * @author ThibeauWouters
+ */
+
 public class FastaContents {
-	// Create new arraylists to save the ids and genomes into
-	private final ArrayList<String> ids     = new ArrayList<String>();
-	private final ArrayList<String> genomes = new ArrayList<String>();
-	private HashMap<String, String> hmap    = new HashMap<String, String>();
+	/**
+	 * ids is an ArrayList storing all the identifiers of the .fasta file
+	 */
+	private final ArrayList<String> ids           = new ArrayList<String>();
+	/**
+	 * genomes is an ArrayList storing all the genome sequences of the .fasta file
+	 */
+	private final ArrayList<String> genomes       = new ArrayList<String>();
+	/**
+	 * fileName holds the name of the .fasta file that we are going to read, in case future
+	 * extensions of the application might want to check this after a .fasta file has been read
+	 * in case there are multiple .fasta files
+	 */
+	private final String fileName;
 
-	public String fileName;
-
+	/**
+	 * The constructor takes the filename (which we create in the main program) pointing towards a .fasta file
+	 * which we are going to read in.
+	 * 
+	 * @param fileName Name of the file containing the alignment we are going to read in the constructor
+	 */
 	public FastaContents(String fileName) {
 		// Save the filename for future convenience
 		this.fileName = fileName;
-		
-		// Check if fileName corresponds to a FASTA file (final 6 characters are ".fasta")
-		// TODO - check file extensions properly
-//		String extension = fileName.substring(fileName.length()-6, fileName.length());
-//		if (!(extension.equals(".fasta"))) {
-//			System.out.println("Alignment constructor takes .fasta files only. Exiting constructor.");
-//			System.exit(0);
-//		}
-		// TODO: is this ok in terms of getting the filepath etc?
 
 		try(Scanner input = new Scanner(new FileReader(fileName));){ 
 			while(input.hasNext()) { 
@@ -41,24 +56,18 @@ public class FastaContents {
 			}  
 		} catch (FileNotFoundException e) {
 			// In case the rights to file are invalid:
-			// TODO: is this indeed the error in case we don't have the right to access the file?
-			System.out.println("Error: file not found or you don't have the rights to access this file?"); 
-			System.out.println("Exiting program");
+			System.out.println("Error: file not found. Exiting program"); 
+			e.printStackTrace();
 			System.exit(0); 
 		} catch (Exception e) {
 			// Catch any other exception
-			System.out.println("Unexpected error occurred: " + e);
-			System.out.println("Exiting program");
+			System.out.println("Unexpected error occurred. Exiting program.");
+			e.printStackTrace();
 			System.exit(0); 
-		}
-		
-		// Also save into the HashMap - this is how our "alignment" looks like
-		for(int i=0;i<ids.size();i++) {
-			this.hmap.put(ids.get(i), genomes.get(i));
 		}
 	}
 	
-	/* Getters */
+	/* Getter functions */
 
 	public ArrayList<String> getIdentifiers() {
 		return this.ids;
@@ -68,9 +77,8 @@ public class FastaContents {
 		return this.genomes;
 	}
 
-	public HashMap<String, String> getAlignment() {
-		return this.hmap;
+	public String getFileName() {
+		return fileName;
 	}
-	
 }
 

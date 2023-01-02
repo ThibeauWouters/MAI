@@ -3,55 +3,60 @@ package team;
 import datastructures.*;
 import team.editors.Editor;
 
+/**
+ * This class implements the functionalities of the team leaders.
+ * 
+ * @author ThibeauWouters
+ *
+ */
+
 public class TeamLead extends Employee {
 
-	/* Variables */
-	
 	/* Constructor */
 	
+	/**
+	 * Saves all instance variables of employee and gives team leaders access to the repository methods.
+	 */
 	public TeamLead(String firstName, String lastName, int yearsOfExperience) {
 		super("TeamLead", firstName, lastName, yearsOfExperience);
+		this.setHasRepositoryAccess(true);
 	}
 	
 	/* Methods */
 	
-	/* Methods to push new optimal alignments to the repo, and check for improvements */
-	
-	public static boolean isValidScore(int score) {
-		return score > 0;
-	}
-	
+	/**
+	 * Promotes the personal alignment of an editor to become the optimal
+	 * alignment of a repository.
+	 * 
+	 * @param repo The repository in which we are going to replace the optimal alignment.
+	 * @param editor The editor of which we are going to promote the alignment to the optimal one.
+	 */
 	public void promoteAlignment(Repository repo, Editor editor) {
 		System.out.println("Promoting alignment of " + editor.getName() + " to optimal one.");
-		repo.setOptimalSA(editor.copyAlignment());
+		repo.promoteAlignment(this, editor);
 	}
 	
-	public void checkForUpdates(Repository repo, Team team) {
-		for (Employee employee : team.getTeam()) {
-			if (employee instanceof Editor) {
-				Editor editor = (Editor) employee;
-				int score = editor.getScore();
-				// Promote the alignment of this editor if it improves upon current optimal score
-				if (score < repo.getOptimalScore() && isValidScore(score)) {
-					System.out.println(editor.getName() + " has better score: " + editor.getScore() + " compared to current optimal: " + repo.getOptimalScore());
-					promoteAlignment(repo, editor);
-				}
-			}
-		}
-	}
-	
-	/* Methods to edit other team member's alignments: */
-	
+	/**
+	 * "Push" an alignment of an editor to the repository. That is, overwrite
+	 * the alignment of that editor stored in the repository with the one
+	 * currently stored as instance variable of the specified editor.
+	 * 
+	 * @param editor Editor object of which we are going to push to the repository.
+	 * @param repo The repository to which we are going to push. 
+	 */
 	public void pushTeamAlignment(Editor editor, Repository repo) {
 		repo.pushTeamAlignment(this, editor);
 	}
 	
+	/**
+	 * Overwrite the personal alignment of an editor with the optimal one
+	 * stored in a repository.
+	 * @param editor The editor whose alignment we are going to overwrite.
+	 * @param repo The repository of which we are going to use the optimal alignment. 
+	 */
 	public void overwriteAlignment(Editor editor, Repository repo) {
-		// Overwrites the alignment of the specified editor with the repo's optimal one
-		repo.overwriteAlignment(editor);
+		repo.overwriteAlignment(this, editor);
 	}
-	
-	/* Methods to write alignments and scores of all editors to files */
 	
 	public void writeData(Repository repo) {
 		repo.writeData(this);
