@@ -35,8 +35,8 @@ def main(input_video_file: str, output_video_file: str) -> None:
 
     # Specify hyperparameters (for during working on frames)
     show = True  # show the frame as well
-    min_time = 12000
-    max_time = 16000  # max time that we are going to process
+    min_time = 20000
+    max_time = 25000  # max time that we are going to process
     # Make sure max_time is at most 60000, i.e. 1 minute
     max_time = min(60000, max_time)
     print(f"Procesing frames between {min_time/1000} seconds and {max_time/1000} seconds.")
@@ -120,6 +120,82 @@ def main(input_video_file: str, output_video_file: str) -> None:
                 frame = cv2.bitwise_and(white, white, mask=mask)
                 subtitle = f"Grabbing (threshold in HSV space)"
 
+            "16 -- 20 seconds: improved grabbing"
+            if between(cap, 16000, 20000):
+                # Convert to HSV space
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                # Blur
+                hsv = cv2.GaussianBlur(hsv, (13, 13), 0)
+                # Specify threshold ranges
+                lower = np.array([0, 150, 0])
+                upper = np.array([179, 255, 255])
+                mask = cv2.inRange(hsv, lower, upper)
+                # Show new improvements in blue
+                white = 255 * np.ones_like(hsv)
+                blue = white
+                blue[:, :, 1] = 0
+                blue[:, :, 2] = 0
+                # Bitwise-AND mask and original image
+                frame = cv2.bitwise_and(white, white, mask=mask)
+                # Now improve with morphological operations
+                kernel_size = (21, 21)
+                kernel = np.ones(kernel_size, np.uint8)
+                # frame = cv2.erode(frame, kernel, iterations=1)
+                # frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel)
+                frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
+                # kernel = np.ones((3, 3), np.uint8)
+                # frame = cv2.dilate(frame, kernel, iterations=1)
+
+                subtitle = f"Grabbing and closing (kernel: {kernel_size})"
+
+            "20 -- 25 seconds: Sobel filter"
+            if between(cap, 20000, 25000):
+                # We vary the Sobel parameters according to time in these 5 seconds:
+                ddepth = cv2.CV_16S
+                if between(cap, 20000, 21000):
+                    # Sobel parameters
+                    scale = 1
+                    delta = 0
+                    x_val = 1
+                    y_val = 0
+                    # Subtitle
+                    subtitle = f"Sobel filter: horizontal, scale: {scale}, delta: {delta}"
+
+                elif between(cap, 21000, 22000):
+                    # Sobel parameters
+                    scale = 5
+                    delta = 0
+                    x_val = 1
+                    y_val = 0
+                    subtitle = f"Sobel filter: horizontal, scale: {scale}, delta: {delta}"
+
+                elif between(cap, 22000, 23000):
+                    # Sobel parameters
+                    scale = 1
+                    delta = 5
+
+                elif between(cap, 23000, 24000):
+                    # Sobel parameters
+                    scale = 1
+                    delta = 10
+
+                elif between(cap, 24000, 25000):
+                    # Sobel parameters
+                    scale = 10
+                    delta = 10
+                    ddepth = cv2.CV_16S
+                # We are going to apply the Sobel operator on each channel, split them:
+                channels = cv2.split(frame)
+                grads = []
+                for channel in channels:
+                    grad_x = cv2.Sobel(channel, ddepth, 1, 0, ksize=3, scale=scale, delta=delta,
+                                       borderType=cv2.BORDER_DEFAULT)
+                    grads.append(grad_x)
+                # Merge back into one picture
+                frame = cv2.merge(grads)
+                # Convert the scale again
+                frame = cv2.convertScaleAbs(frame)
+
             # Write subtitle, with a timestamp, and save to write frame to output
             timestamp = '{:.3f}'.format(get_time(cap)/1000)
             cv2.putText(frame, subtitle + f" ({timestamp} s)", (int(0.1*frame_width), int(0.1*frame_height)), font, 2, (0, 0, 255), 2, cv2.LINE_4)
@@ -132,7 +208,7 @@ def main(input_video_file: str, output_video_file: str) -> None:
                 cv2.waitKey(1)
 
             # Print progress of compiling new video
-            print(f"Progress: {min(int(round(100*get_time(cap)/max_time)), 100)} %", end="\r")
+            # print(f"Progress: {min(int(round(100*get_time(cap)/max_time)), 100)} %", end="\r")
             # (optional) Stop processing if we exceed max_time
             if get_time(cap) > max_time:
                 break

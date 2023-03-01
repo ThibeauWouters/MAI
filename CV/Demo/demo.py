@@ -183,18 +183,64 @@ def sliders_RGB(filename):
 
     cv2.destroyAllWindows()
 
+
 def grabbing():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
     # Load original image
-    image = cv2.imread("apple.jpeg")
-    # Show the output
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower = np.array([155, 25, 0])
-    upper = np.array([179, 255, 255])
-    image = cv2.inRange(image, lower, upper)
-    cv2.imshow("Image", image)
+    frame = cv2.imread("onion2.jpg")
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # Blur
+    # hsv = cv2.GaussianBlur(hsv, (3, 3), 0)
+    # Specify threshold ranges
+    lower = np.array([0, 150, 15])
+    upper = np.array([179, 250, 250])
+    mask = cv2.inRange(hsv, lower, upper)
+    # # Bitwise-AND mask and original image
+    white = 255 * np.ones_like(hsv)
+    frame = cv2.bitwise_and(white, white, mask=mask)
+    # Show
+    cv2.imshow('Frame', frame)
+    cv2.waitKey(0)
+    # Now improve with morphological operations
+    kernel = np.ones((7, 7), np.uint8)
+    # frame = cv2.erode(frame, kernel, iterations=1)
+    # frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel)
+    frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
+    # kernel = np.ones((3, 3), np.uint8)
+    # frame = cv2.dilate(frame, kernel, iterations=1)
+    # Show
+    cv2.imshow('Second', frame)
     cv2.waitKey(0)
 
 
-# grabbing()
-sliders_HSV('onion2.jpg')
+def sobel():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("onion.jpg")
+    # Convert to HVS
+    # We are going to apply the Sobel operator on each channel
+    channels = cv2.split(frame)
+    # Sobel parameters
+    scale = 1
+    delta = 0
+    ddepth = cv2.CV_16S
+    grads = []
+    for channel in channels:
+        grad_x = cv2.Sobel(channel, ddepth, 1, 0, ksize=3, scale=scale, delta=delta, borderType=cv2.BORDER_DEFAULT)
+        grads.append(grad_x)
+    # Merge back into one picture
+    frame = cv2.merge(grads)
+    # Convert the scale again
+    frame = cv2.convertScaleAbs(frame)
+    # Show
+    cv2.imshow('Frame', frame)
+    cv2.waitKey()
+
+
+sobel()
+# sliders_HSV('onion2.jpg')
 # sliders_RGB('frame.jpg')
+
+
