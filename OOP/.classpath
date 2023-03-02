@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="src" path="session1/src"/>
+	<classpathentry kind="src" path="session2/src"/>
+	<classpathentry kind="src" path="session3/src"/>
+	<classpathentry excluding="src/" kind="src" path="session4"/>
+	<classpathentry kind="src" path="session4/src"/>
+	<classpathentry kind="output" path="session1/bin"/>
+</classpath>

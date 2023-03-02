@@ -271,16 +271,20 @@ def euclideanHeuristic(position, problem, info={}):
 #####################################################
 
 def euclideanDistance(position1, position2, info={}):
-    "The Euclidean distance heuristic for a PositionSearchProblem"
+    """Like the Euclidean distance heuristic for a PositionSearchProblem: computes the Euclidean distance
+        between two points, such that this can be used in other heuristics as well."""
     xy1 = position1
     xy2 = position2
-    return ( (xy1[0] - xy2[0]) ** 2 + (xy1[1] - xy2[1]) ** 2 ) ** 0.5
+    return ((xy1[0] - xy2[0]) ** 2 + (xy1[1] - xy2[1]) ** 2) ** 0.5
+
 
 def manhattanDistance(position1, position2):
-    "The Manhattan distance heuristic for a PositionSearchProblem"
+    """Like the Manhattan distance heuristic for a PositionSearchProblem: computes the Manhattan distance
+        between two points, such that this can be used in other heuristics as well."""
     xy1 = position1
     xy2 = position2
     return abs(xy1[0] - xy2[0]) + abs(xy1[1] - xy2[1])
+
 
 class CornersProblem(search.SearchProblem):
     """
@@ -296,14 +300,21 @@ class CornersProblem(search.SearchProblem):
         self.walls = startingGameState.getWalls()
         self.startingPosition = startingGameState.getPacmanPosition()
         top, right = self.walls.height-2, self.walls.width-2
-        self.corners = ((1,1), (1,top), (right, 1), (right, top))
+        self.corners = ((1, 1), (1, top), (right, 1), (right, top))
         for corner in self.corners:
             if not startingGameState.hasFood(*corner):
                 print('Warning: no food in corner ' + str(corner))
         self._expanded = 0 # DO NOT CHANGE; Number of search nodes expanded
 
         "*** YOUR CODE HERE ***"
-        # 4 goal states: visited all corners and at the end we are at a corner
+        # States are a tuple containing the (x, y) location of Pacman in the grid as first element, and a tuple of
+        # four booleans indicating whether a corner has been visited during the search or not. The order is matched
+        # with the order of self.corners.
+
+        # Hence, there are 4 goal states: at the end of the search, Pacman surely sits at any of the 4 corners,
+        # and moreover, he has visited all corners, so all boolean values are equal to one.
+
+        # Store all goalstates in the instance:
         self.goalStates = [(corner, (1, 1, 1, 1)) for corner in self.corners]
         self.costFn = costFn
 
@@ -313,8 +324,18 @@ class CornersProblem(search.SearchProblem):
         space)
         """
         "*** YOUR CODE HERE ***"
-        ### TO DO: this won't work if we START in a corner???
-        return self.startingPosition, (0, 0, 0, 0)
+
+        # If we do NOT start at a corner, all corners are un-visited (boolean = 0).
+        if self.startingPosition not in self.corners:
+            return self.startingPosition, (0, 0, 0, 0)
+        else:
+            # If we do start at a corner of the maze, have to put corresponding boolean equal to 1!
+            cornersAsList = list(self.corners)
+            cornerIndex = cornersAsList.index(self.startingPosition)
+            cornersAsList[cornerIndex] = 1
+            visitedCorners = tuple(cornersAsList)
+            # Return position and updated corners
+            return self.startingPosition, visitedCorners
 
     def isGoalState(self, state: Any):
         """
@@ -322,6 +343,7 @@ class CornersProblem(search.SearchProblem):
         """
         "*** YOUR CODE HERE ***"
 
+        # Simply check if the current state matches with the goal states saved during initialization
         return state in self.goalStates
 
     def getSuccessors(self, state: Any):
@@ -351,15 +373,14 @@ class CornersProblem(search.SearchProblem):
                 if nextPosition in self.corners:
                     # In that case, get index of that corner...
                     index = self.corners.index(nextPosition)
-                    # ... and change boolean value in cornerHistory
-                    ### TO DO: improve this cumbersome code?
+                    # ... and change corresponding boolean value in cornerHistory
                     nextCornerHistoryAsList = list(cornerHistory)
                     nextCornerHistoryAsList[index] = 1
                     nextCornerHistory = tuple(nextCornerHistoryAsList)
 
                 # Build the next state:
                 nextState = (nextPosition, nextCornerHistory)
-                successors.append( ( nextState, action, cost) )
+                successors.append((nextState, action, cost))
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
@@ -398,6 +419,13 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     "*** YOUR CODE HERE ***"
     heuristic = 0
 
+    # The idea is that we can relax the problem by ignoring the walls and therefore compute distances using the
+    # Manhattan metric. Note that this will only give a consistent heuristic since the food is guaranteed to be
+    # located only in the corners of the maze in these problems. Hence, given the state, we compute the corners
+    # that still have to be visited. Then, we compute the Manhattan distance between Pacman and the closest corner.
+    # From that corner, compute Manhattan distance to the closest corner, and repeat this step untill all remaining
+    # corners have eventually been visited.
+
     # Get the current state: position and which corners were already reached
     current_position = state[0]
     reached_corners = state[1]
@@ -408,27 +436,32 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
         if reached_corners[i] == 0:
             corners_to_reach.append(corner)
 
+    # Do the following as long as there are still corners to reach:
+    # Note: if all corners have been reached, this guarantees that the heuristic returns 0.
     while len(corners_to_reach) != 0:
-        # Compute, from this position, the Manhattan distance to all corners
+        # Compute, from current position, the Manhattan distance to all remaining corners
         current_distances = [manhattanDistance(current_position, corner) for corner in corners_to_reach]
 
-        # From these distances, take the closest corner
+        # From these distances, choose the closest corner, and save it
         best_distance = min(current_distances)
         best_index = current_distances.index(best_distance)
         best_corner = corners_to_reach[best_index]
+        # Add the distance to the current heuristic value
         heuristic += best_distance
 
-        # Update your position, and remove the corner
+        # Update your position, and remove the corner from the remaining corners list. Repeat loop.
         current_position = best_corner
         corners_to_reach.remove(best_corner)
 
     return heuristic
+
 
 class AStarCornersAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"
     def __init__(self):
         self.searchFunction = lambda prob: search.aStarSearch(prob, cornersHeuristic)
         self.searchType = CornersProblem
+
 
 class FoodSearchProblem:
     """
@@ -480,11 +513,13 @@ class FoodSearchProblem:
             cost += 1
         return cost
 
+
 class AStarFoodSearchAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"
     def __init__(self):
         self.searchFunction = lambda prob: search.aStarSearch(prob, foodHeuristic)
         self.searchType = FoodSearchProblem
+
 
 def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
@@ -516,7 +551,27 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+    heuristic = 0
+
+    # The idea is to take the walls into account, but relax the problem by requiring Pacman to only eat one dot,
+    # namely, the one that is currently the farthest away. For this, Pacman has to find the distance, taking the
+    # maze into account, to all the remaining food dots, and then choose the dot farthest away to eat that one.
+    # The computed distance, using mazeDistance provided to us below, is then returned as the heuristic value.
+    # This is consistent due to the relaxation of the problem, and gives us a low amount of expanded nodes.
+    # Drawback: quite slow due to multiple calls to BFS to compute this maze distance!
+
+    # Get the remaining dots, as a list instead of booleans on a grid:
+    remaining_dots = foodGrid.asList()
+
+    # If we are at a goal state, make sure to return 0
+    if len(remaining_dots) == 0:
+        return 0
+
+    # Return largest distance between Pacman and all remaining dots. Take walls into account
+    else:
+        current_distances = [mazeDistance(position, dot, problem.startingGameState) for dot in remaining_dots]
+        return max(current_distances)
+
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
@@ -547,7 +602,10 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # BFS will by definition give the optimal solution, i.e.: first food that Pacman reached
+        solution = search.bfs(problem)
+        return solution
+
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -583,7 +641,8 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Goal state: we reached ANY food location
+        return (x, y) in self.food.asList()
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """

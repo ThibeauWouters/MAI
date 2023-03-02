@@ -26,7 +26,7 @@ public class StringOperations {
 		System.out.println("When you're not drunk: " + testWord);
 		System.out.println("When you're drunk: " + reversedWord);
 		
-		String secretePalindromeQ = "lol";
-		System.out.println("The word " + secretePalindromeQ + " is palindrome? " + isPalindrome(secretePalindromeQ));
+		String palindromeTest = "lol";
+		System.out.println("The word " + palindromeTest + " is palindrome? " + isPalindrome(palindromeTest));
 	}
 }
