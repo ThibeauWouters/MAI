@@ -278,6 +278,7 @@ def main(input_video_file: str, output_video_file: str) -> None:
 
             "35 - 40s: template matching"
             if between(cap, 35000, 40000):
+                print(np.shape(frame))
                 # Read in a template
                 template = cv2.imread("template_apple.png")
 

@@ -348,25 +348,93 @@ def features_demo():
     # Create a window for showing later on
     cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
     # Load original image
-    frame = cv2.imread("other_1.png")
+    frame = cv2.imread("other_3.png")
     # height, width, channels = frame.shape
-    template = cv2.imread("template_1.png")
+    # template = cv2.imread("template_1.png")
 
     # Convert both to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    val = 200
+    _, thresholded = cv2.threshold(gray, val, 255, cv2.THRESH_BINARY)
 
-    corners = cv2.goodFeaturesToTrack(gray_template, 25, 0.01, 10)
-    corners = np.int0(corners)
-    for i in corners:
-        x, y = i.ravel()
-        cv2.circle(gray_template, (x, y), 3, 255, -1)
+    # Create SIFT object
+    sift = cv2.SIFT_create()
 
-    cv2.imshow("Frame", gray_template)
+    # Initialize variables for the best match
+    best_template_idx = -1
+    best_num_matches = -1
+
+    for i in range(1,7):
+        name = f"template_{i}.jpg"
+        gray_template = cv2.imread(name, cv2.IMREAD_GRAYSCALE)
+
+        _, thresholded_template = cv2.threshold(gray_template, 50, 255, cv2.THRESH_BINARY)
+        # Do closing:
+        kernel_size = (5, 5)  # kernel size for the operation
+        kernel_type = cv2.MORPH_RECT  # kernel type (rectangular in this case)
+        kernel = cv2.getStructuringElement(kernel_type, kernel_size)
+        thresholded_template = cv2.morphologyEx(thresholded_template, cv2.MORPH_CLOSE, kernel)
+        thresholded = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, kernel)
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(thresholded, None)
+        kp2, des2 = sift.detectAndCompute(thresholded_template, None)
+
+        # BFMatcher with default params
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(des1, des2, k=2)
+        # Apply ratio test
+        good = []
+        for m, n in matches:
+            if m.distance < 0.75 * n.distance:
+                good.append([m])
+        # cv2.drawMatchesKnn expects list of lists as matches.
+        img3 = cv2.drawMatchesKnn(thresholded, kp1, thresholded_template, kp2, good, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        cv2.imshow("Frame", img3)
+        cv2.waitKey(0)
+        print(len(good))
+
+        if len(good) > best_num_matches:
+            best_template_idx = i
+            best_num_matches = len(good)
+
+        print("best match: ", best_template_idx)
+
+
+def detecting_dices():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("other_3.png")
+
+    # Convert both to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    val = 200
+    _, thresholded = cv2.threshold(gray, val, 255, cv2.THRESH_BINARY)
+    thresholded = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, (7, 7))
+
+    height, width = thresholded.shape[:2]
+    side = max(height, width)
+    # Find contours in the binary image
+    contours, hierarchy = cv2.findContours(thresholded, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    counter = 0
+    for contour in contours:
+        # Calculate the area of the contour
+        area = cv2.contourArea(contour)
+        x, y, w, h = cv2.boundingRect(contour)
+        if area < (side/4)**2:
+            cv2.rectangle(gray, (x, y), (x+w, y+h), 0, 1)
+            counter += 1
+
+    print(counter)
+
+    cv2.imshow("Frame", gray)
     cv2.waitKey(0)
 
+    # print("best match: ", best_template_idx)
 
-features_demo()
+detecting_dices()
+# features_demo()
 # template_matching()
 # template_matching_likelihood()
 # hough_circles()

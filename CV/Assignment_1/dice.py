@@ -34,71 +34,62 @@ def dist(x1, y1, x2, y2):
     return np.sqrt((x1-x2)**2 + (y1-y2)**2)
 
 
-def rotate_image(img, angle):
-    rows, cols = img.shape[:2]
-    M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
-    rotated = cv2.warpAffine(img, M, (cols, rows))
-    return rotated
-
-
 def main(input_video_file: str, output_video_file: str) -> None:
     # OpenCV video objects to work with
     cap = cv2.VideoCapture(input_video_file)
     fps = int(round(cap.get(5)))
     frame_width = int(cap.get(3))
     frame_height = int(cap.get(4))
+    # Note: we take the transpose
+    frame_width, frame_height = frame_height, frame_width
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # saving output video as .mp4
     out = cv2.VideoWriter(output_video_file, fourcc, fps, (frame_width, frame_height))
 
-    # For final part, read the templates
-    # Read in templates
+    # Create SIFT object for object recognition
+    sift = cv2.SIFT_create()
+
+    # Read in templates and process them
     templates, gray_templates = [], []
     widths, heights = [], []
+    sift_templates = []
     for i in range(1, 7):
         # Read in template
-        name = f"template_{i}.png"
+        name = f"template_{i}.jpg"
         template = cv2.imread(name)
         # Also get grayscale version
         gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        # Compute features and descriptors
+        kp, des = sift.detectAndCompute(gray_template, None)
         # Save
         templates.append(template)
         gray_templates.append(gray_template)
+        sift_templates.append((kp, des))
         w, h = gray_template.shape[::-1]
         widths.append(w)
         heights.append(h)
 
-    # Define thresholds for areas of dice
-    smallest_area = min(widths)*min(heights)*0.5
-    largest_area = max(widths) * max(heights) * 1.5
-    smallest_distance = math.floor(0.8 * min(widths + heights))
-    largest_distance = math.floor(1.25 * max(widths + heights))
-    print(widths + heights)
-    print(largest_distance)
-
-    # TODO - Colors for the different dices
+    # Define threshold for areas of dice
+    smallest_area = 400
 
     # Specify hyperparameters (for during working on frames)
     show = True
-    show_progress = False
-    min_time = 2000
-    max_time = 30000
+    show_progress = True
+    min_time = 0
+    max_time = 20000
 
-    # Make sure max_time is at most 60000, i.e. 1 minute
-    max_time = min(30000, max_time)
     print(f"Procesing frames between {min_time/1000} seconds and {max_time/1000} seconds.")
     font = cv2.FONT_HERSHEY_PLAIN
 
     while cap.isOpened():
         ret, frame = cap.read()
+        # Rotate each frame to have the same dimensions as first part video
+        frame = cv2.transpose(frame)
         if ret:
             cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('Frame', (frame_width, frame_height))
             # If before min time, we don't handle those frames (used when constructing video)
             if between(cap, 0, min_time):
                 continue
-            # Choose a particular method for template matching and evaluate it
-            meth = 'cv2.TM_CCOEFF_NORMED'
-            method = eval(meth)
 
             # Get grayscale image
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -109,7 +100,6 @@ def main(input_video_file: str, output_video_file: str) -> None:
 
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, lower, upper)
-            # output = cv2.bitwise_and(frame, frame, mask=mask)
 
             # Now do the same, but try to detect the circle (green area)
             lower_circle = np.array([36, 80, 0])
@@ -139,13 +129,13 @@ def main(input_video_file: str, output_video_file: str) -> None:
                 cv2.circle(frame, (center_x, center_y), 2, (0, 0, 255), 3)
 
             # Now, get contours for dices
-            ret, thresh = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+            ret, thresh = cv2.threshold(mask, 150, 255, cv2.THRESH_BINARY)
             # Find contours in the binary image
             contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             # Loop through each contour and filter out the dices
             dice_x, dice_y, dice_widths, dice_heights = [], [], [], []
             for contour in contours:
-                # Calculate the area and perimeter of the contour
+                # Calculate the area of the contour
                 area = cv2.contourArea(contour)
                 x, y, w, h = cv2.boundingRect(contour)
                 if dist(center_x, center_y, x, y) < radius and area > smallest_area:
@@ -155,48 +145,81 @@ def main(input_video_file: str, output_video_file: str) -> None:
                     dice_widths.append(w)
                     dice_heights.append(h)
 
-            # Detect the face using template matching
-            # Iterate over all the dices:
-            for i in range(len(dice_x)):
-                # Initialize the label we are going to guess
-                label = "???"
-                # Initialize current best value to zero
-                current_best = -1
-                # Extract the dice's image
-                dice_image = frame[dice_y[i]:dice_y[i]+largest_distance, dice_x[i]:dice_x[i]+largest_distance]
-                # cv2.imwrite('TEST.jpg', dice_image)
-                cv2.imshow("Test", dice_image)
-                cv2.waitKey(0)
-                for j, gray_template in enumerate(gray_templates):
-                    # Blur a bit
-                    dice_image = cv2.GaussianBlur(dice_image, (3, 3), 0)
-                    best_rotation_value = 0
-                    # Iterate over all rotations of the template
-                    for angle in range(0, 360, 10):
-                        rotated_template = rotate_image(gray_template, angle)
-                        # TODO - no rotation for now
-                        rotated_template = gray_template
-                        # Apply template Matching
-                        result = cv2.matchTemplate(dice_image, rotated_template, method)
-                        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                        if max_val > best_rotation_value:
-                            best_rotation_value = max_val
-                    # After testing rotations, see if we improved dice face estimate
-                    if best_rotation_value > current_best:
-                        label = str(j+1)
-                        current_best = best_rotation_value
-                # At this point, we have the best guess for the face number: draw rectangle
-                cv2.rectangle(frame, (dice_x[i], dice_y[i]), (dice_x[i] + dice_widths[i], dice_y[i] + dice_heights[i]),
-                              (0, 255, 0), 2)
-                cv2.putText(frame, label, (dice_x[i], dice_y[i] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            "40 -- 50 s: Detect the face using feature descriptors"
+            if between(cap, 0, 10000):
+                # Iterate over all the dices:
+                subtitle = "Detecting faces of dices"
+                explanation_subtitle = "Using feature descriptors (results are not so reliable)"
+                for i in range(len(dice_x)):
+                    # Initialize variables
+                    best_label = "???"
+                    best_num_matches = 0
+                    # Extract the dice's image
+                    dice_image = frame[dice_y[i]:dice_y[i]+dice_heights[i], dice_x[i]:dice_x[i]+dice_widths[i]]
+                    # Convert to gray scale
+                    gray = cv2.cvtColor(dice_image, cv2.COLOR_BGR2GRAY)
+                    # Find the keypoints and descriptors of this dice with SIFT
+                    kp, des = sift.detectAndCompute(gray, None)
 
-            subtitle = ""
-            explanation_subtitle = ""
+                    for j, (kp_template, des_template) in enumerate(sift_templates):
+                        # BFMatcher with default params
+                        bf = cv2.BFMatcher()
+                        matches = bf.knnMatch(des, des_template, k=2)
+                        # Apply ratio test to determine good matches
+                        good = []
+                        for m, n in matches:
+                            if m.distance < 0.8 * n.distance:
+                                good.append([m])
+                        num_matches = len(good)
+                        # After testing rotations, see if we improved dice face estimate
+                        if num_matches > best_num_matches:
+                            best_label = str(j+1)
+                            best_num_matches = num_matches
+                    # At this point, we have the best guess for the face number: draw rectangle
+                    cv2.rectangle(frame, (dice_x[i], dice_y[i]),
+                                  (dice_x[i] + dice_widths[i], dice_y[i] + dice_heights[i]),
+                                  (0, 0, 255), 2)
+                    cv2.putText(frame, best_label, (dice_x[i], dice_y[i] - 10), cv2.FONT_HERSHEY_SIMPLEX, 2,
+                                (0, 0, 255), 4)
+
+            "50 -- 60 s: Detect the face by detecting contours"
+            if between(cap, 10000, 20000):
+                subtitle = "Detecting faces of dices"
+                explanation_subtitle = "Using contour detections (more reliable results)"
+
+                # Initialize empty list to count
+                counter = [0 for i in range(len(dice_x))]
+                # Now, count the number of contours within each dice contour
+                for contour in contours:
+                    # Calculate the area and get specifications
+                    area = cv2.contourArea(contour)
+                    x, y, w, h = cv2.boundingRect(contour)
+                    # Check if it is located inside the game area and a "small contour"
+                    if dist(center_x, center_y, x, y) < radius and smallest_area > area > 120:
+                        # This is a dot on a dice face, draw it:
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                        # Find in which dice this contour is located. Compute distance to all dice centers
+                        distances = [
+                            dist(dice_x[i] + dice_widths[i] / 2, dice_y[i] + dice_heights[i] / 2, x + w / 2, y + h / 2)
+                            for i in range(len(dice_x))]
+                        # Increment counter of closest dice center
+                        if len(distances) == 0:
+                            continue
+                        else:
+                            index = np.argmin(distances)
+                            counter[index] += 1
+
+                # Now, draw the rectangles and show the text
+                for i in range(len(dice_x)):
+                    text = str(counter[i])
+                    cv2.rectangle(frame, (dice_x[i], dice_y[i]), (dice_x[i] + dice_widths[i], dice_y[i] + dice_heights[i]),
+                                  (0, 0, 255), 2)
+                    cv2.putText(frame, text, (dice_x[i], dice_y[i] - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 4)
 
             # Write subtitle, with a timestamp, and save to write frame to output
-            timestamp = '{:.3f}'.format(get_time(cap)/1000)
-            cv2.putText(frame, subtitle + f" ({timestamp} s)", (int(0.1*frame_width), int(0.1*frame_height)), font, 2, (0, 0, 255), 2, cv2.LINE_4)
-            cv2.putText(frame, explanation_subtitle, (int(0.1 * frame_width), int(0.13 * frame_height)), font,
+            timestamp = '{:.3f}'.format((40000+get_time(cap))/1000)
+            cv2.putText(frame, subtitle + f" ({timestamp} s)", (int(0.05*frame_width), int(0.05*frame_height)), font, 2, (0, 0, 255), 2, cv2.LINE_4)
+            cv2.putText(frame, explanation_subtitle, (int(0.05 * frame_width), int(0.08 * frame_height)), font,
                         2, (0, 0, 255), 2, cv2.LINE_4)
             out.write(frame)
 
