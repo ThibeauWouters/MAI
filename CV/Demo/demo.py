@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 
+
 def numpy_example():
     zeros = np.zeros((100, 100))
     hundreds = np.full_like(zeros, 100)
@@ -82,7 +83,7 @@ def sliders_HSV(filename):
         # Create HSV Image and threshold into a range.
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, lower, upper)
-        output = cv2.bitwise_and(image,image, mask= mask)
+        output = cv2.bitwise_and(image, image, mask=mask)
 
         # Print if there is a change in HSV value
         if( (phMin != hMin) | (psMin != sMin) | (pvMin != vMin) | (phMax != hMax) | (psMax != sMax) | (pvMax != vMax) ):
@@ -219,7 +220,8 @@ def sobel():
     cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
     # Load original image
     frame = cv2.imread("onion.jpg")
-    # Convert to HVS
+    # Blur for better results
+    frame = cv2.GaussianBlur(frame, (11, 11), 0)
     # We are going to apply the Sobel operator on each channel
     channels = cv2.split(frame)
     # Sobel parameters
@@ -228,7 +230,8 @@ def sobel():
     ddepth = cv2.CV_16S
     grads = []
     for channel in channels:
-        grad_x = cv2.Sobel(channel, ddepth, 1, 0, ksize=3, scale=scale, delta=delta, borderType=cv2.BORDER_DEFAULT)
+        grad_x = cv2.Sobel(channel, ddepth, 1, 0, ksize=5, scale=scale, delta=delta, borderType=cv2.BORDER_DEFAULT)
+        # Append the final result together again
         grads.append(grad_x)
     # Merge back into one picture
     frame = cv2.merge(grads)
@@ -239,8 +242,136 @@ def sobel():
     cv2.waitKey()
 
 
-sobel()
-# sliders_HSV('onion2.jpg')
+def hough_circles():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("oranges.jpg")
+    # Blur for better results
+    frame = cv2.GaussianBlur(frame, (3, 3), 0)
+    # Convert image to grayscale for Hough circles:
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, gray.shape[0] / 16, param1=100, param2=50, minRadius=120, maxRadius=500)
+    # Draw detected circles on the original frame
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for i in circles[0, :]:
+            # Draw outer circle
+            cv2.circle(frame, (i[0], i[1]), i[2], (0, 255, 0), 2)
+            # Draw inner circle
+            cv2.circle(frame, (i[0], i[1]), 2, (0, 0, 255), 3)
+
+    # Convert the scale again
+    cv2.imshow('Frame', frame)
+    cv2.waitKey()
+
+
+def template_matching():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("frame.png")
+    template = cv2.imread("template_apple.png")
+
+    # Blur a bit
+    frame = cv2.GaussianBlur(frame, (3, 3), 0)
+    template = cv2.GaussianBlur(template, (3, 3), 0)
+    # Convert to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    print(np.shape(gray))
+    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    w, h = gray_template.shape[::-1]
+    # All possible methods:
+    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR',
+               'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+
+    meth = methods[0]
+    method = eval(meth)
+    # Apply template Matching
+    res = cv2.matchTemplate(gray, gray_template, method)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
+    if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+        top_left = min_loc
+    else:
+        top_left = max_loc
+    bottom_right = (top_left[0] + w, top_left[1] + h)
+    cv2.rectangle(gray, top_left, bottom_right, 255, 2)
+
+    # What are the dimensions
+    print(np.shape(gray))
+
+    cv2.imshow('Frame', gray)
+    cv2.waitKey()
+
+
+def template_matching_likelihood():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("frame.png")
+    height, width, channels = frame.shape
+    template = cv2.imread("template_apple_4.png")
+
+    # Blur a bit
+    frame = cv2.GaussianBlur(frame, (3, 3), 0)
+    template = cv2.GaussianBlur(template, (3, 3), 0)
+    # Convert to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    w, h = gray_template.shape[::-1]
+    # All possible methods:
+    methods = ['cv2.TM_CCOEFF', 'cv2.TM_CCOEFF_NORMED', 'cv2.TM_CCORR',
+               'cv2.TM_CCORR_NORMED', 'cv2.TM_SQDIFF', 'cv2.TM_SQDIFF_NORMED']
+
+    # meth = methods[0]
+    meth = 'cv2.TM_CCOEFF_NORMED'
+    method = eval(meth)
+    # Apply template Matching
+    result = cv2.matchTemplate(gray, gray_template, method)
+    cv2.imshow('Frame', result)
+    cv2.waitKey()
+    # Normalize the values to grayscale
+    result = cv2.normalize(result, None, 0, 1, cv2.NORM_MINMAX)
+    # Convert to grayscale
+    result = (255*result).astype(np.uint8)
+    # Resize the result variable to the same dimensions as the original frames
+    result = cv2.resize(result, (width, height))
+    # Merge into 3 color channels
+    result = cv2.merge((result, result, result))
+    print(result)
+    cv2.imshow('Frame', result)
+    cv2.waitKey()
+
+
+def features_demo():
+    # Create a window for showing later on
+    cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+    # Load original image
+    frame = cv2.imread("other_1.png")
+    # height, width, channels = frame.shape
+    template = cv2.imread("template_1.png")
+
+    # Convert both to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+    corners = cv2.goodFeaturesToTrack(gray_template, 25, 0.01, 10)
+    corners = np.int0(corners)
+    for i in corners:
+        x, y = i.ravel()
+        cv2.circle(gray_template, (x, y), 3, 255, -1)
+
+    cv2.imshow("Frame", gray_template)
+    cv2.waitKey(0)
+
+
+features_demo()
+# template_matching()
+# template_matching_likelihood()
+# hough_circles()
+# sobel()
+# sliders_HSV('dice_frame.png')
 # sliders_RGB('frame.jpg')
 
 
