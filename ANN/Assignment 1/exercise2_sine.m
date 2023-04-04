@@ -18,10 +18,10 @@ y = sin(x.^2);
 sigma=0.2;
 yn = y + sigma*randn(size(y));
 % Choose our targets - change to yn for noisy data
-t = y;
+t = yn;
 
 % Define the number of iterations and hidden layer size
-num_iterations = 1000;
+num_iterations = 100;
 num_repetitions = 20;
 hidden_layer_size = 50;
 
