@@ -33,46 +33,60 @@ else
     target = train_y;
 end
 
-
 % Define the number of iterations, how often we train for an algorithm, and hidden layer size
-num_iterations = 300;
+num_iterations_list = [10, 100, 300];
 num_repetitions = 20;
-hidden_layer_size = 10;
+hidden_layer_size_list = [10, 50, 100];
 
 % Create a new CSV file for saving the data
 filename = 'sine_results.csv';
-header = {'Hidden', 'Algorithm', 'Iterations', 'Training Time', 'Mean Squared Error', 'Noise'};
+header = {'Hidden', 'Algorithm', 'Iterations', 'Training Time', 'Train MSE', 'Test MSE', 'Noise'};
 writecell(header, filename);
 
-for i = 1:length(algorithms)
-    fprintf('Training algorithm %d out of %d\n', i, length(algorithms));
-    for j = 1:num_repetitions
-        fprintf('--- Training %d out of %d\n', j, num_repetitions);
-        % Choose the algorithm to use
-        alg = algorithms(i);
-        % Define the network
-        net = feedforwardnet(hidden_layer_size, alg);
-        % Configure to the example
-        net = configure(net, train_x, target);
-        % Use only training data
-        net.divideFcn = 'dividetrain';
-        % Randomly initialize the weights
-        net = init(net);
-        % Don't show window during training (annoying)
-        net.trainParam.showWindow = 0;
-        % Save the number of epochs to train
-        net.trainParam.epochs = num_iterations;
-        % Start training, and time it
-        tic;
-        net = train(net, train_x, target);
-        training_time = toc;
-        % Evaluate the network on the testing data
-        y_pred = net(test_x);
-        mse = mean((test_y - y_pred).^2);
-        
-        % Save the training results to the CSV file
-        results = {hidden_layer_size, char(algorithms(i)), num_iterations, training_time, mse, noise};
-        writecell(results, filename, 'WriteMode', 'append');
+%%% Do many iterations of training
+
+% Vary over the amount of epochs for training
+for a = 1:length(num_iterations_list)
+    num_iterations = num_iterations_list(a);
+    % Vary over the size of the hidden layer
+    for b = 1:length(hidden_layer_size_list)
+        hidden_layer_size = hidden_layer_size_list(b);
+        for i = 1:length(algorithms)
+            % Vary over the different training algorithms
+            fprintf('Training algorithm %d out of %d\n', i, length(algorithms));
+            for j = 1:num_repetitions
+                % Repeat each set up 20 times
+                fprintf('--- Training %d out of %d\n', j, num_repetitions);
+                % Choose the algorithm to use
+                alg = algorithms(i);
+                % Define the network
+                net = feedforwardnet(hidden_layer_size, alg);
+                % Configure to the example
+                net = configure(net, train_x, target);
+                % Use only training data
+                net.divideFcn = 'dividetrain';
+                % Randomly initialize the weights
+                net = init(net);
+                % Don't show window during training (annoying)
+                net.trainParam.showWindow = 0;
+                % Save the number of epochs to train
+                net.trainParam.epochs = num_iterations;
+                % Start training, and time it
+                tic;
+                net = train(net, train_x, target);
+                training_time = toc;
+                % Evaluate the network on the testing data and training data
+                y_pred = net(train_x);
+                train_mse = mean((train_y - y_pred).^2);
+                y_pred = net(test_x);
+                test_mse = mean((test_y - y_pred).^2);
+                
+                % Save the training results to the CSV file
+                results = {hidden_layer_size, char(algorithms(i)), num_iterations, training_time, train_mse, test_mse, noise};
+                writecell(results, filename, 'WriteMode', 'append');
+            end
+        end
+        disp("Done!");
     end
 end
-disp("Done!");
+
