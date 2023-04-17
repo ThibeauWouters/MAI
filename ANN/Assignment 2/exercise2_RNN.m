@@ -3,39 +3,39 @@ clc
 close all
 
 %%%%%%%%%%%
-%exercise2_sine
+%exercise2_RNN
 % A script for the solution of exercise 2, training a recurrent neural
 % network
 %%%%%%%%%%%
 
-train_data = load('lasertrain.dat');
-test_data = load('laserpred.dat');
+train_data = load('Data/lasertrain.dat');
+test_data = load('Data/laserpred.dat');
 
 % Compute mean and std
 mu     = mean(train_data);
 sigma  = std(train_data);
 
-% Normalize data
+% Normalize data, use same transformation on the test data as well
 train_data = (train_data - mu)/sigma;
 test_data  = (test_data  - mu)/sigma;
 
 % Create a new CSV file for saving the data
 filename = 'RNN_results.csv';
-header = {'Hidden', 'p', 'Train MSE', 'Test MSE'};
+header = {'Hidden', 'p', 'Train MSE', 'Val MSE', 'Test MSE'};
 writecell(header, filename);
 
 %%%  Define the hyperparams
 
 % Lag parameter
-p_list = [20];
+p_list = [30];
 % Size hidden layer
-hidden_layer_size_list = [50];
+hidden_layer_size_list = [30];
 % Max number of training epochs
-num_iterations = 500;
+num_iterations = 100;
 % How many epochs to wait before early stopping
-max_fail = 100;
+max_fail = ceil(0.25*num_iterations);
 % How often to repeat each setup
-nb_repetitions = 3;
+nb_repetitions = 1;
 
 %%% Train the networks
 
@@ -59,7 +59,7 @@ for a = 1:length(p_list)
             net.divideParam.valRatio   = 0.3;
             net.divideParam.testRatio  = 0;
             % Save the number of validation checks before early stopping 
-            net.trainParam.max_fail = 10;
+            net.trainParam.max_fail = max_fail;matlab
             % Randomly initialize the weights
             net = init(net);
             % Don't show window during training (annoying)
@@ -75,14 +75,11 @@ for a = 1:length(p_list)
             % Train the network
             [net, tr] = train(net, train_data_rnn, train_target);
             
-            %%% Plot training procedure for insights
-            %plotperform(tr);
-            
             %%% Predict on the test set
             
             % Get the initial input, i.e. final values of the train set
             len_train_data = size(train_data_rnn, 2);
-            input_vec = train_data_rnn(:, len_train_data);
+            input_vec = train_data_rnn(:, end);
             
             % Get the number of predictions to be made
             num_predictions = size(test_data, 1);
@@ -91,21 +88,21 @@ for a = 1:length(p_list)
             output_vec = zeros(size(test_data));
             
             % Loop over the remaining timesteps of the test set
-            for l = 2:num_predictions
+            for l = 1:num_predictions
                 % Predict the next timestep using the current input vector
                 predicted_val = net(input_vec);
             
-                % Store the predicted value in the output vector
+                % Store the predicted value in the final output vector
                 output_vec(l) = predicted_val;
             
-                % Update the input vector by shifting in the predicted value
+                % Shift input vector and append the predicted value
                 input_vec = [input_vec(2:end);predicted_val];
             end
             
             % Compute MSE on the test set
             mse = mean((test_data - output_vec).^2);
             % Write down observations to CSV file
-            results = {hidden_layer_size, p, tr.best_vperf, mse};
+            results = {hidden_layer_size, p, tr.best_perf, tr.best_vperf, mse};
             writecell(results, filename, 'WriteMode', 'append');
         end
     end
