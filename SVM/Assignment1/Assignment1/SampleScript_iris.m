@@ -19,9 +19,6 @@ fprintf('\n on test: #misclass = %d, error rate = %.2f%%\n', err, err/length(Yte
 
 disp('Press any key to continue...'), pause, 
 
-
-
-
 %
 % Train the LS-SVM classifier using polynomial kernel
 %
