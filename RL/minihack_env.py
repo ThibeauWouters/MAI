@@ -8,16 +8,15 @@ import numpy as np
 
 
 ACTIONS = tuple(nethack.CompassCardinalDirection)
-print(ACTIONS)
 def translate_action(action):
     """Simple auxiliary function that translates an action from ACTION to its compass direction as str."""
-    if action == ACTIONS[0]:
+    if action == 0:
         return "N"
-    elif action == ACTIONS[1]:
+    elif action == 1:
         return "E"
-    elif action == ACTIONS[2]:
+    elif action == 2:
         return "S"
-    elif action == ACTIONS[3]:
+    elif action == 3:
         return "W"
     else:
         # If action not recognized, return original
@@ -60,65 +59,6 @@ MAP
 ENDMAP
 """
 
-class GridWorld(gym.Env):
-    def __init__(self, n, m):
-        self.n = n
-        self.m = m
-        self.action_space = gym.spaces.Discrete(4)
-        self.observation_space = gym.spaces.Tuple((gym.spaces.Discrete(n), gym.spaces.Discrete(m)))
-        self.reward_range = (-1, 0)
-        self.state = (0, 0)
-        self.goal = (n-1, m-1)
-        
-    def step(self, action):
-        # The current state
-        x, y = self.state
-        # Check which compass direction was chosen
-        if action == ACTIONS[0]:
-            # Go north
-            x = max(0, x-1)
-        elif action == ACTIONS[1]:
-            # Go east
-            y = min(self.m-1, y+1)
-        elif action == ACTIONS[2]:
-            # Go south
-            x = min(self.n-1, x+1)
-        elif action == ACTIONS[3]:
-            # Go west
-            y = max(0, y-1)
-            
-        # Give rewards after action was performed
-        if (x, y) == self.goal:
-            reward = 0
-            done = True
-        else:
-            reward = -1
-            done = False
-
-        self.state = (x, y)
-        return self.state, reward, done
-
-    def reset(self):
-        self.state = (0, 0)
-        return self.state
-    
-    def render(self):
-        # Get an empty grid of specified size (n, m)
-        grid = np.zeros((self.n, self.m), dtype=np.int8)
-        grid[self.goal] = 2
-        grid[self.state] = 1
-
-        output = ''
-        for row in grid:
-            for val in row:
-                if val == 0:
-                    output += '.'
-                elif val == 1:
-                    output += 'X'
-                elif val == 2:
-                    output += 'G'
-            output += '\n'
-        print(output)
 
 
 # Methods given by assignment:
