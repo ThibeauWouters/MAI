@@ -7,7 +7,9 @@ from minihack import RewardManager
 import numpy as np
 
 
-ACTIONS = tuple(nethack.CompassCardinalDirection)
+# ACTIONS = tuple(nethack.CompassCardinalDirection)
+ACTIONS = [0, 1, 2, 3]
+
 def translate_action(action):
     """Simple auxiliary function that translates an action from ACTION to its compass direction as str."""
     if action == 0:

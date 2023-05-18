@@ -1,7 +1,10 @@
 from minihack_env import * 
-# from quickstart import *
 from commons import *
 import matplotlib.pyplot as plt
+from GridWorld import GridWorld
+from RandomAgent import RandomAgent
+from FixedAgent import FixedAgent
+from RLTask import RLTask
 
 # Test the grid world
 
@@ -21,18 +24,20 @@ def task_1_1(n=5, m=5, n_episodes=10000):
     avg_return_values = task.interact(n_episodes)
     
     print("Done. Plotting average returns . . .")
-    plt.plot(avg_return_values, '-o', color="blue")
+    plt.figure(figsize=(10,3))
+    plt.plot(avg_return_values, '-', color="blue")
     plt.grid()
     plt.title("Random agent")
     plt.xlabel("Episodes")
     plt.ylabel("Average return value")
-    plt.savefig("results.pdf", bbox_inches = 'tight')
+    plt.savefig("Plots/random_agent/average_return.pdf", bbox_inches = 'tight')
     plt.close()
     
-    print("Done. Showing first ten iterations of episode")
+    print("Done. Showing and saving first ten iterations of episode in pixel plots . . .")
     
     # Visualize first ten iterations
-    task.visualize_episode(max_number_steps=10, plot=True, name="Plots/random_agent")
+    # TODO - how to save them?
+    task.visualize_episode(max_number_steps=10, plot=False, name="Plots/random_agent/visualization")
     
 def task_1_2(n_episodes=1):
     
@@ -58,7 +63,7 @@ def task_1_2(n_episodes=1):
         task.visualize_episode(max_number_steps=10, plot=True, name=name_list[i], title=title)
         
 def main():
-    task_1_2(n_episodes=1)
+    task_1_2()
 
 
 # Execute main test:
