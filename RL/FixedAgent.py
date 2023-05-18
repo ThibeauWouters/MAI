@@ -32,12 +32,12 @@ class FixedAgent():
         # If we are still following first direction, check if we should turn
         if not self.turned:
             # Else, check if we can still do first action, otherwise turn
-            observation = get_crop_chars_from_observation(state)
-            position = np.argwhere(observation == 64)[0]
+            # observation = get_crop_chars_from_observation(state)
+            position = np.argwhere(state == 64)[0]
             x, y = position
-            n, m = observation.shape
+            n, m = state.shape
             next_x, next_y = get_next_grid_position(x, y, self.fixed_action, n, m)
-            if observation[next_x, next_y] != 46:
+            if state[next_x, next_y] != 46:
                 # Turn the agent
                 self.fixed_action = self.second_action
                 self.turned = True
@@ -45,7 +45,7 @@ class FixedAgent():
         return self.fixed_action
         
 
-    def onEpisodeEnd(self, reward, episode):
+    def onEpisodeEnd(self):
         """
         This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
         end of an episode.

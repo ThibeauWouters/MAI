@@ -33,33 +33,32 @@ class RLTask():
         # Do the episodes
         for i in tqdm(range(n_episodes)):
             # Reset everything
-            state = self.env.reset()
-            # TODO - incremental way of doing averages?
+            observation = self.env.reset()
             return_value = 0
             done = False
             reward = 0
-            # To save states, actions, rewards in this episode:
-            self.rewards_list = []
-            self.actions_list = []
-            self.states_list = []
+            
+            # Clear states, actions and rewards lists
+            self.agent.clear_lists()
             
             # Do an episode:
             while not done:
                 # Save current state
-                self.states_list.append(state)
+                # Convert state to the cropped representation
+                state = get_crop_chars_from_observation(observation)
+                self.agent.states_list.append(state.copy())
                 # Agent chooses interaction and interacts with environment
-                action = self.agent.act(state, reward)
-                state, reward, done, _ = self.env.step(action)
+                action = self.agent.act(state, reward)  
+                observation, reward, done, _ = self.env.step(action)
                 # Save chosen action and observed reward
-                self.rewards_list.append(reward)
-                self.actions_list.append(action)
-                
-                
+                self.agent.actions_list.append(action)
+                self.agent.rewards_list.append(reward)
+            
             # Let the agent learn after end of episode:
-            self.agent.onEpisodeEnd(self.states_list, self.actions_list, self.rewards_list, i)
+            self.agent.onEpisodeEnd()
             
             # Episode is over, compute return
-            return_value = np.sum(self.rewards_list)
+            return_value = np.sum(self.agent.rewards_list)
             # Append the return to the list of returns
             returns_list[i] = return_value
             # Compute the average of the first episodes
@@ -91,7 +90,7 @@ class RLTask():
         print("\n")
         
         # Reconstruct the episode from the actions and information of the environment
-        for i, action in enumerate(self.action_list):
+        for i, action in enumerate(self.agent.actions_list):
             # Make a step in the environment
             state, _, done, _ = self.env.step(action)
             # Translate this action into readable language

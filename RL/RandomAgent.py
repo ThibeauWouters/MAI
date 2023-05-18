@@ -27,7 +27,7 @@ class RandomAgent():
         return np.random.choice(self.action_space)
         
 
-    def onEpisodeEnd(self, reward, episode):
+    def onEpisodeEnd(self):
         """
         This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
         end of an episode.

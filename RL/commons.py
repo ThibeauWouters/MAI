@@ -7,12 +7,13 @@ from nle import nethack
 from minihack import RewardManager
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from typing import Tuple, Callable
 
 # Abstract classes, provided by the assignment
 
 class AbstractAgent():
 
-    def __init__(self, id, action_space):
+    def __init__(self, id, action_space=np.array([0,1,2,3])):
         """
         An abstract interface for an agent.
 
@@ -21,10 +22,20 @@ class AbstractAgent():
         """
         self.id = id
         self.action_space = action_space
+        
+        # Lists for observed states, actions, rewards
+        self.states_list  = []
+        self.actions_list = []
+        self.rewards_list = []
 
         # Flag that you can change for distinguishing whether the agent is used for learning or for testing.
         # You may want to disable some behaviour when not learning (e.g. no update rule, no exploration eps = 0, etc.)
         self.learning = True
+        
+    def clear_lists(self):
+        self.states_list  = []
+        self.actions_list = []
+        self.rewards_list = []
 
     def act(self, state, reward=0):
         """
@@ -38,7 +49,7 @@ class AbstractAgent():
         raise NotImplementedError()
 
 
-    def onEpisodeEnd(self, reward, episode):
+    def onEpisodeEnd(self):
         """
         This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
         end of an episode.
@@ -84,7 +95,9 @@ class AbstractRLTask():
 
         raise NotImplementedError()
 
-
+#######################
+# Auxiliary functions #
+#######################
 
 blank = 32
 def get_crop_chars_from_observation(observation):
@@ -105,9 +118,12 @@ def get_crop_pixel_from_observation(observation):
     return non_empty_pixels
 
 
-# Auxiliary functions
-def get_next_grid_position(x, y, action, n, m):
-        # Check which compass direction was chosen
+def get_next_grid_position(x: int, y: int, action: int, n: int, m: int) -> Tuple[int, int]:
+    """
+    Determines next grid position based on action in (n, m) grid world.
+    """
+    
+    # Check which compass direction was chosen
     if action == 0:
         # Go north
         x = max(0, x-1)
@@ -123,3 +139,16 @@ def get_next_grid_position(x, y, action, n, m):
         
     return x, y
 
+def have_common_element(arr1: np.array, arr2: np.array) -> bool:
+    """
+    Checks whether arr1 and arr2 have at leasts one common element
+    """
+    common_elements = np.intersect1d(arr1, arr2)
+    return len(common_elements) > 0
+
+
+def incremental_avg(prev_avg, new_val, n):
+    if n == 0:
+        return new_val
+    else:
+        return prev_avg + (new_val - prev_avg)/n
