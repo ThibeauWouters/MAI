@@ -13,7 +13,7 @@ from typing import Tuple, Callable
 
 class AbstractAgent():
 
-    def __init__(self, id, action_space=np.array([0,1,2,3])):
+    def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), max_episode_steps=50):
         """
         An abstract interface for an agent.
 
@@ -22,20 +22,16 @@ class AbstractAgent():
         """
         self.id = id
         self.action_space = action_space
-        
-        # Lists for observed states, actions, rewards
-        self.states_list  = []
-        self.actions_list = []
-        self.rewards_list = []
+        self.max_episode_steps = max_episode_steps
 
         # Flag that you can change for distinguishing whether the agent is used for learning or for testing.
         # You may want to disable some behaviour when not learning (e.g. no update rule, no exploration eps = 0, etc.)
         self.learning = True
         
-    def clear_lists(self):
-        self.states_list  = []
-        self.actions_list = []
-        self.rewards_list = []
+    def reset_lists(self):
+        self.states_list  = np.zeros(self.max_episode_steps, dtype=int)
+        self.actions_list = np.zeros(self.max_episode_steps, dtype=int)
+        self.rewards_list = np.zeros(self.max_episode_steps)
 
     def act(self, state, reward=0):
         """
@@ -49,7 +45,17 @@ class AbstractAgent():
         raise NotImplementedError()
 
 
-    def onEpisodeEnd(self):
+    def onEpisodeEnd(self, iteration_counter):
+        """
+        This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
+        end of an episode.
+        :param reward: the reward obtained in the last step
+        :param episode: the episode number
+        :return:
+        """
+        pass
+    
+    def onIterationEnd(self, iteration_counter):
         """
         This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
         end of an episode.
@@ -92,7 +98,7 @@ class AbstractRLTask():
         :param max_number_steps: Optional, maximum number of steps to plot.
         :return:
         """
-
+        
         raise NotImplementedError()
 
 #######################
@@ -152,3 +158,7 @@ def incremental_avg(prev_avg, new_val, n):
         return new_val
     else:
         return prev_avg + (new_val - prev_avg)/n
+    
+
+def np_hash(arr):
+    return hash(arr.data.tobytes())

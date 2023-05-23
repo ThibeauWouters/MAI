@@ -15,7 +15,7 @@ class RLTask():
         :param agent: the interacting agent
         """
 
-        self.env = env
+        self.env   = env
         self.agent = agent
 
     def interact(self, n_episodes: int) -> float:
@@ -39,23 +39,25 @@ class RLTask():
             reward = 0
             
             # Clear states, actions and rewards lists
-            self.agent.clear_lists()
+            self.agent.reset_lists()
             
             # Do an episode:
+            iteration_counter = 0
             while not done:
-                # Save current state
                 # Convert state to the cropped representation
                 state = get_crop_chars_from_observation(observation)
-                self.agent.states_list.append(state.copy())
+                self.agent.states_list[iteration_counter] = np_hash(state)
                 # Agent chooses interaction and interacts with environment
                 action = self.agent.act(state, reward)  
                 observation, reward, done, _ = self.env.step(action)
                 # Save chosen action and observed reward
-                self.agent.actions_list.append(action)
-                self.agent.rewards_list.append(reward)
+                self.agent.actions_list[iteration_counter] = action
+                self.agent.rewards_list[iteration_counter] = reward
+                self.agent.onIterationEnd(iteration_counter)
+                iteration_counter += 1
             
             # Let the agent learn after end of episode:
-            self.agent.onEpisodeEnd()
+            self.agent.onEpisodeEnd(iteration_counter)
             
             # Episode is over, compute return
             return_value = np.sum(self.agent.rewards_list)

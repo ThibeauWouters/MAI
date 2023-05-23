@@ -135,7 +135,7 @@ def get_minihack_environment(id, **kwargs):
             max_episode_steps=max_episode_steps,
             observation_keys=obs
         )
-
+        
         env = DoNotResetWhenDead(env, max_episode_steps)
     elif id == ROOM_WITH_LAVA:
         des_file = des_room_with_lava
