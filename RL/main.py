@@ -12,6 +12,10 @@ from RLTask import RLTask
 
 # Test the grid world
 
+ROOM_IDS = [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.CLIFF, minihack_env.ROOM_WITH_MONSTER]
+
+max_episode_steps_dict = {minihack_env.EMPTY_ROOM: 50, minihack_env.ROOM_WITH_LAVA:1000, minihack_env.CLIFF:1000, minihack_env.ROOM_WITH_MONSTER: 1000}
+
 def task_1_1(n=5, m=5, n_episodes=10000):
     
     print("Hello, this is task 1.1, checking behaviour of random agent.")
@@ -75,11 +79,16 @@ def task_2_MC(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_render
     
     print("Hello, this is task 2, MC agent.")
     
+    
     # Get the ID and environment
     id = room_id
     print(f"Environment: {id}")
     save_name = f"Plots/MC_agent/{id}/"
-    env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
+    max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
+    kwargs["max_episode_steps"] = max_episode_steps
+    
+    # Build environment
+    env = minihack_env.get_minihack_environment(room_id, add_pixel="True", max_episode_steps=max_episode_steps)
     state = env.reset()
     # Define the agent
     agent = MCAgent("0", save_name, **kwargs)
@@ -100,6 +109,9 @@ def task_2_SARSA(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_ren
     # Get the ID and environment
     id = room_id
     print(f"Environment: {id}")
+    max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
+    kwargs["max_episode_steps"] = max_episode_steps
+    
     save_name = f"Plots/SARSA_agent/{id}/"
     env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
     state = env.reset()
@@ -118,13 +130,16 @@ def task_2_SARSA(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_ren
         task.visualize_episode(plot=True, name=f"Plots/SARSA_agent/{id}/visualization")
        
         
-def task_2_Q(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
+def task_2_Q(n_episodes=100, max_episode_steps = 1000, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
     
     print("Hello, this is task 2, Q-learning agent.")
     
     # Get the ID and environment
     id = room_id
     print(f"Environment: {id}")
+    max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
+    kwargs["max_episode_steps"] = max_episode_steps
+    
     save_name = f"Plots/Q_agent/{id}/"
     env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
     state = env.reset()
@@ -148,10 +163,10 @@ def test_saving_and_loading():
     task_2_SARSA(n_episodes=1, load_name = f"Plots/SARSA_agent/empty-room/")
         
 def main():
-    # task_2_MC(n_episodes=1000)
+    task_2_MC(n_episodes=1000)
     # task_2_SARSA(n_episodes=1000)
     # task_2_Q(n_episodes=100)
-    test_saving_and_loading()
+    # test_saving_and_loading()
 
 
 # Execute main test:

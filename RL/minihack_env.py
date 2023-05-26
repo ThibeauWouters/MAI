@@ -116,7 +116,7 @@ def get_minihack_environment(id, **kwargs):
 
     if id == EMPTY_ROOM:
         env = MiniHackRoom(size = size,
-                           max_episode_steps=50,
+                           max_episode_steps=max_episode_steps,
                            actions=ACTIONS,
                            random = random,
                            observation_keys=obs,
