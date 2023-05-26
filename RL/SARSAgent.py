@@ -15,7 +15,7 @@ def default_Q_value_callable():
 
 class SARSAgent(AbstractAgent):
 
-    def __init__(self, id, save_name, action_space=np.array([0,1,2,3]), alpha = 0.1, eps = 0.01, gamma = 1.0, 
+    def __init__(self, id, save_name, action_space=np.array([0,1,2,3]), alpha = 0.1, eps = 0.05, gamma = 1.0, 
                  max_episode_steps=50, load_name=""):
         """
         An abstract interface for an agent.

@@ -77,7 +77,7 @@ class RLTask():
             avg_returns_list[i] = np.mean(returns_list[:i+1])
             
             # If filename given, save avg return to filename
-            write_to_txt(self.save_name, [avg_returns_list[i]])
+            write_to_txt(self.save_name, [return_value])
             # Save agent's policy for observation later on:
             self.agent.save_memory()
                 

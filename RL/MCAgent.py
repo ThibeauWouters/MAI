@@ -15,7 +15,7 @@ def default_memory_value_callable():
 
 class MCAgent(AbstractAgent):
 
-    def __init__(self, id, save_name, action_space=np.array([0,1,2,3], dtype=int), eps = 0.01, gamma = 1.0, 
+    def __init__(self, id, save_name, action_space=np.array([0,1,2,3], dtype=int), eps = 0.05, gamma = 1.0, 
                  max_episode_steps=50, load_name=""):
         """
         An abstract interface for an agent.
