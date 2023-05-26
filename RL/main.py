@@ -159,6 +159,43 @@ def task_2_Q(n_episodes=1000, id = minihack_env.EMPTY_ROOM, plot_and_render = Tr
         print("Done. Visualizing ten episodes . . .")
         task.visualize_episode(plot=True, name=f"Plots/Q_agent/{id}/visualization")
         
+        
+def task_2(agent_name, id, n_episodes=1000, **kwargs):
+    
+    # Get the details of the environment
+    print(f"Environment: {id}")
+    max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
+    kwargs["max_episode_steps"] = max_episode_steps
+    
+    # Location to save information:
+    save_name = f"Plots/{agent_name}/{id}/"
+    
+    # Set-up agent
+    if agent_name == "MC_agent":
+        agent = MCAgent("0", save_name, **kwargs)
+    elif agent_name == "SARSA_agent":
+        agent = SARSAgent("0", save_name, **kwargs)
+    elif agent_name == "Q_agent":
+        agent = QAgent("0", save_name, **kwargs)
+    else:
+        print("Agent name not recognized")
+        return
+        
+    # Prepare environment
+    env = minihack_env.get_minihack_environment(id, add_pixel="True", max_episode_steps=max_episode_steps)
+    state = env.reset()
+    print(f"Eps: {agent.eps}")
+    print(f"Max steps episode: {agent.max_episode_steps}")
+    # Define the RL task
+    task = RLTask(env, agent, save_name)
+    avg_return_values = task.interact(n_episodes)
+    
+    print("Done, plotting average returns . . . ")
+    plot_average_returns(avg_return_values, "Q_agent", id, agent.eps)
+    # Visualize first ten iterations
+    print("Done. Visualizing ten episodes . . .")
+    task.visualize_episode(plot=True, name=f"Plots/Q_agent/{id}/visualization")    
+        
 def test_saving_and_loading():
     # Learn a lot
     task_2_SARSA(n_episodes=1000)
@@ -166,12 +203,16 @@ def test_saving_and_loading():
     task_2_SARSA(n_episodes=1, load_name = f"Plots/SARSA_agent/empty-room/")
         
 def main():
-    id = minihack_env.EMPTY_ROOM
-    # task_2_MC(id=id)
-    # task_2_SARSA(id=id)
-    task_2_Q(id=id)
-    # test_saving_and_loading()
-
+    # id = minihack_env.EMPTY_ROOM
+    # Other ones:
+    
+    task_2("SARSA_agent", minihack_env.EMPTY_ROOM)
+    
+    
+    # for id in [minihack_env.ROOM_WITH_LAVA, minihack_env.CLIFF, minihack_env.ROOM_WITH_MONSTER]:
+    #     task_2_MC(id=id)
+    #     task_2_SARSA(id=id)
+    #     task_2_Q(id=id)
 
 # Execute main test:
 if __name__ == "__main__":
