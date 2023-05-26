@@ -3,6 +3,7 @@ import numpy as np
 from commons import *
 from commons import AbstractAgent
 from collections import defaultdict
+import pickle
 
 VERBOSE = False
 
@@ -14,7 +15,8 @@ def default_memory_value_callable():
 
 class MCAgent(AbstractAgent):
 
-    def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), eps = 0.01, gamma = 1.0, max_episode_steps=50):
+    def __init__(self, id, save_name, action_space=np.array([0,1,2,3], dtype=int), eps = 0.01, gamma = 1.0, 
+                 max_episode_steps=50, load_name=""):
         """
         An abstract interface for an agent.
 
@@ -28,10 +30,20 @@ class MCAgent(AbstractAgent):
         self.eps      = eps
         self.gamma    = gamma
         
-        self.memory = defaultdict(default_memory_value_callable)
-        # ^ memory has Q-values and n, the number of updates, to compute an incremental average
-        
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
+
+
+        # Memory has Q-values and n, the number of updates, to compute an incremental average
+        # Either create empty memory or load from previous training
+        if load_name=="":
+            self.memory = defaultdict(default_memory_value_callable)
+        else:
+            self.load_memory(load_name)
+            
+        # For saving the agents' policy:
+        self.save_name = save_name + "memory.pkl"
+            
+        
         
     def policy(self, state):
             """
@@ -83,9 +95,9 @@ class MCAgent(AbstractAgent):
         g_value = 0
         
         # Limit the lists:
-        self.actions_list = self.actions_list[:iteration_counter+1]
-        self.states_list  = self.states_list[:iteration_counter+1]
-        self.rewards_list = self.rewards_list[:iteration_counter+1]
+        self.actions_list = self.actions_list[:iteration_counter]
+        self.states_list  = self.states_list[:iteration_counter]
+        self.rewards_list = self.rewards_list[:iteration_counter]
         
         # Reverse lists: go from T to 0
         self.actions_list = np.array(self.actions_list[::-1])
@@ -119,3 +131,18 @@ class MCAgent(AbstractAgent):
                 new_avg = incremental_avg(prev_avg, g_value, n)
                 self.memory[(state, action)] = np.array([new_avg, n+1])
                 
+    def onIterationEnd(self, iteration_counter, next_state):
+        pass
+    
+    def save_memory(self):
+        
+        # Open a file and use dump()
+        with open(self.save_name, 'wb') as file:
+            pickle.dump(self.memory, file)
+            
+    def load_memory(self, load_name):
+        load_name += "memory.pkl"
+        
+        # Open a file and use dump()
+        with open(load_name, 'rb') as file:
+            self.memory = pickle.load(file)

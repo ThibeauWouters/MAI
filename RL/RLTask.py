@@ -3,10 +3,11 @@ import numpy as np
 from tqdm import tqdm
 import gym 
 from commons import *
+import pickle
 
 class RLTask():
 
-    def __init__(self, env: gym.Env, agent: AbstractAgent):
+    def __init__(self, env: gym.Env, agent: AbstractAgent, save_name):
         """
         This class abstracts the concept of an agent interacting with an environment.
 
@@ -17,6 +18,10 @@ class RLTask():
 
         self.env   = env
         self.agent = agent
+        # For saving the returns during a run:
+        self.save_name = save_name + "returns.csv"
+        f = open(self.save_name, "w")
+        f.close()
 
     def interact(self, n_episodes: int) -> float:
         """
@@ -34,6 +39,8 @@ class RLTask():
         for i in tqdm(range(n_episodes)):
             # Reset everything
             observation = self.env.reset()
+            # Convert state to the cropped representation
+            state = get_crop_chars_from_observation(observation)
             return_value = 0
             done = False
             reward = 0
@@ -44,16 +51,19 @@ class RLTask():
             # Do an episode:
             iteration_counter = 0
             while not done:
-                # Convert state to the cropped representation
-                state = get_crop_chars_from_observation(observation)
+                # Append latest state
                 self.agent.states_list[iteration_counter] = np_hash(state)
                 # Agent chooses interaction and interacts with environment
                 action = self.agent.act(state, reward)  
                 observation, reward, done, _ = self.env.step(action)
+                next_state = get_crop_chars_from_observation(observation)
                 # Save chosen action and observed reward
                 self.agent.actions_list[iteration_counter] = action
                 self.agent.rewards_list[iteration_counter] = reward
-                self.agent.onIterationEnd(iteration_counter)
+                # Iteration ends, make agent learn
+                self.agent.onIterationEnd(iteration_counter, np_hash(next_state))
+                # Update state and counter
+                state = next_state
                 iteration_counter += 1
             
             # Let the agent learn after end of episode:
@@ -66,10 +76,17 @@ class RLTask():
             # Compute the average of the first episodes
             avg_returns_list[i] = np.mean(returns_list[:i+1])
             
+            # If filename given, save avg return to filename
+            write_to_txt(self.save_name, [avg_returns_list[i]])
+            # Save agent's policy for observation later on:
+            self.agent.save_memory()
+                
+            
+            
         return avg_returns_list
 
     def visualize_episode(self, max_number_steps: int = 10, 
-                          plot=False, name="visualization", title=""):
+                          plot=True, name="visualization", title=""):
         """
         This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
         You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
@@ -92,8 +109,12 @@ class RLTask():
         print("\n")
         
         # Reconstruct the episode from the actions and information of the environment
+        done=False
         for i, action in enumerate(self.agent.actions_list):
-            # Make a step in the environment
+            # Check if done, then finished
+            if done:
+                return
+            # Otherwise, can make a step in the environment
             state, _, done, _ = self.env.step(action)
             # Translate this action into readable language
             action = minihack_env.translate_action(action)
@@ -102,7 +123,7 @@ class RLTask():
             self.env.render()
             print("\n")
             # Save pixel plots to .png if desired
-            if plot and not done:
+            if plot:
                 plt.imshow(get_crop_pixel_from_observation(state))
                 plt.xticks([])
                 plt.yticks([])

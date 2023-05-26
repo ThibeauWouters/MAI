@@ -8,6 +8,7 @@ from minihack import RewardManager
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from typing import Tuple, Callable
+import csv
 
 # Abstract classes, provided by the assignment
 
@@ -55,7 +56,7 @@ class AbstractAgent():
         """
         pass
     
-    def onIterationEnd(self, iteration_counter):
+    def onIterationEnd(self, iteration_counter, next_state):
         """
         This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
         end of an episode.
@@ -64,7 +65,12 @@ class AbstractAgent():
         :return:
         """
         pass
-
+    
+    def save_memory(self, save_name):
+        pass
+            
+    def load_memory(self, load_name):
+        pass
 
 
 class AbstractRLTask():
@@ -162,3 +168,25 @@ def incremental_avg(prev_avg, new_val, n):
 
 def np_hash(arr):
     return hash(arr.data.tobytes())
+
+
+def plot_average_returns(avg_return_values, agent_name, id, eps):
+    plt.figure(figsize=(10,3))
+    plt.plot(avg_return_values, '-', color="blue")
+    plt.grid()
+    plt.title(f"{agent_name}, {id}, eps = {eps}")
+    plt.xlabel("Episodes")
+    plt.ylabel("Average return value")
+    plt.savefig(f"Plots/{agent_name}/{id}/average_return.pdf", bbox_inches = 'tight')
+    plt.close()
+    
+def write_to_txt(filename, row):
+    """
+    Small auxiliary file that writes a line to a csv file, used for logging progress in training or pruning.
+    :param csv_file: csv file to which we will write csv.
+    :param row: Data that has to be written to the file.
+    :return: Nothing.
+    """
+    
+    with open(filename, "ab") as f:
+        np.savetxt(f, row)

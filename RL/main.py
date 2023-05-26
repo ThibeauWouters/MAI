@@ -1,11 +1,13 @@
 from minihack_env import * 
 from commons import *
+import time
 import matplotlib.pyplot as plt
 from GridWorld import GridWorld
 from RandomAgent import RandomAgent
 from FixedAgent import FixedAgent
 from MCAgent import MCAgent
 from SARSAgent import SARSAgent
+from QAgent import QAgent
 from RLTask import RLTask
 
 # Test the grid world
@@ -64,69 +66,92 @@ def task_1_2(n_episodes=10):
         task.visualize_episode(max_number_steps=10, plot=True, name=name_list[i], title=title)
         
         
-def task_2_MC(n_episodes=100, eps=0.01, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True):
+##########
+# TASK 2 #
+##########
+        
+        
+def task_2_MC(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
     
     print("Hello, this is task 2, MC agent.")
     
     # Get the ID and environment
     id = room_id
     print(f"Environment: {id}")
+    save_name = f"Plots/MC_agent/{id}/"
     env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
     state = env.reset()
     # Define the agent
-    agent = MCAgent("0", eps=eps)
+    agent = MCAgent("0", save_name, **kwargs)
     # Define the RL task
-    task = RLTask(env, agent)
+    task = RLTask(env, agent, save_name)
     avg_return_values = task.interact(n_episodes)
     
     if plot_and_render:    
-        print("Done. Plotting average returns . . .")
-        plt.figure(figsize=(10,3))
-        plt.plot(avg_return_values, '-', color="blue")
-        plt.grid()
-        plt.title(f"MC agent, {id}, eps = {eps}")
-        plt.xlabel("Episodes")
-        plt.ylabel("Average return value")
-        plt.savefig(f"Plots/MC_agent/{id}/average_return.pdf", bbox_inches = 'tight')
-        plt.close()
-        
+        plot_average_returns(avg_return_values, "MC_agent", id, agent.eps)
         # Visualize first ten iterations
         print("Done. Visualizing ten episodes . . .")
-        task.visualize_episode(max_number_steps=10, plot=True, name=f"Plots/MC_agent/{id}/visualization")
+        task.visualize_episode(plot=True, name=f"Plots/MC_agent/{id}/visualization")
         
-def task_2_SARSA(n_episodes=100, eps=0.01, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True):
+def task_2_SARSA(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
     
     print("Hello, this is task 2, SARSA agent.")
     
     # Get the ID and environment
     id = room_id
     print(f"Environment: {id}")
+    save_name = f"Plots/SARSA_agent/{id}/"
     env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
     state = env.reset()
     # Define the agent
-    agent = SARSAgent("0", eps=eps)
+    agent = SARSAgent("0", save_name, **kwargs)
     # Define the RL task
-    task = RLTask(env, agent)
+    save_name = kwargs["save_name"] if "save_name" in kwargs else ""
+    task = RLTask(env, agent, save_name)
     avg_return_values = task.interact(n_episodes)
     
     if plot_and_render:    
-        print("Done. Plotting average returns . . .")
-        plt.figure(figsize=(10,3))
-        plt.plot(avg_return_values, '-', color="blue")
-        plt.grid()
-        plt.title(f"SARSA agent, {id}, eps = {eps}")
-        plt.xlabel("Episodes")
-        plt.ylabel("Average return value")
-        plt.savefig(f"Plots/SARSA_agent/{id}/average_return.pdf", bbox_inches = 'tight')
-        plt.close()
+        plot_average_returns(avg_return_values, "SARSA_agent", id, agent.eps)
         
         # Visualize first ten iterations
         print("Done. Visualizing ten episodes . . .")
-        task.visualize_episode(max_number_steps=10, plot=True, name=f"Plots/SARSA_agent/{id}/visualization")
+        task.visualize_episode(plot=True, name=f"Plots/SARSA_agent/{id}/visualization")
+       
+        
+def task_2_Q(n_episodes=100, room_id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
+    
+    print("Hello, this is task 2, Q-learning agent.")
+    
+    # Get the ID and environment
+    id = room_id
+    print(f"Environment: {id}")
+    save_name = f"Plots/Q_agent/{id}/"
+    env = minihack_env.get_minihack_environment(room_id, add_pixel="True")
+    state = env.reset()
+    # Define the agent
+    agent = QAgent("0", save_name, **kwargs)
+    # Define the RL task
+    task = RLTask(env, agent, save_name)
+    avg_return_values = task.interact(n_episodes)
+    
+    if plot_and_render:    
+        print("Done, plotting average returns . . . ")
+        plot_average_returns(avg_return_values, "Q_agent", id, agent.eps)
+        # Visualize first ten iterations
+        print("Done. Visualizing ten episodes . . .")
+        task.visualize_episode(plot=True, name=f"Plots/Q_agent/{id}/visualization")
+        
+def test_saving_and_loading():
+    # Learn a lot
+    task_2_SARSA(n_episodes=1000)
+    # Then load and use the learned policy
+    task_2_SARSA(n_episodes=1, load_name = f"Plots/SARSA_agent/empty-room/")
         
 def main():
     # task_2_MC(n_episodes=1000)
-    task_2_SARSA(n_episodes=10)
+    # task_2_SARSA(n_episodes=1000)
+    # task_2_Q(n_episodes=100)
+    test_saving_and_loading()
 
 
 # Execute main test:
