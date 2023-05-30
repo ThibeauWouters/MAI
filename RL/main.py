@@ -73,91 +73,7 @@ def task_1_2(n_episodes=10):
 ##########
 # TASK 2 #
 ##########
-        
-        
-# def task_2_MC(n_episodes=1000, id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
-    
-#     print("Hello, this is task 2, MC agent.")
-    
-    
-#     # Get the ID and environment
-#     print(f"Environment: {id}")
-#     save_name = f"Plots/MC_agent/{id}/"
-#     max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
-#     kwargs["max_episode_steps"] = max_episode_steps
-    
-#     # Build environment
-#     env = minihack_env.get_minihack_environment(id, add_pixel="True", max_episode_steps=max_episode_steps)
-#     state = env.reset()
-#     # Define the agent
-#     agent = MCAgent("0", save_name, **kwargs)
-#     print(f"Eps: {agent.eps}")
-#     print(f"Max steps episode: {agent.max_episode_steps}")
-#     # Define the RL task
-#     task = RLTask(env, agent, save_name)
-#     avg_return_values = task.interact(n_episodes)
-    
-#     if plot_and_render:    
-#         plot_average_returns(avg_return_values, "MC_agent", id, agent.eps)
-#         # Visualize first ten iterations
-#         print("Done. Visualizing ten episodes . . .")
-#         task.visualize_episode(plot=True, name=f"Plots/MC_agent/{id}/visualization")
-        
-# def task_2_SARSA(n_episodes=1000, id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
-    
-#     print("Hello, this is task 2, SARSA agent.")
-    
-#     # Get the ID and environment
-#     print(f"Environment: {id}")
-#     max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
-#     kwargs["max_episode_steps"] = max_episode_steps
-    
-#     save_name = f"Plots/SARSA_agent/{id}/"
-#     env = minihack_env.get_minihack_environment(id, add_pixel="True", max_episode_steps=max_episode_steps)
-#     state = env.reset()
-#     # Define the agent
-#     agent = SARSAgent("0", save_name, **kwargs)
-#     print(f"Eps: {agent.eps}")
-#     print(f"Max steps episode: {agent.max_episode_steps}")
-#     # Define the RL task
-#     save_name = kwargs["save_name"] if "save_name" in kwargs else ""
-#     task = RLTask(env, agent, save_name)
-#     avg_return_values = task.interact(n_episodes)
-    
-#     if plot_and_render:    
-#         plot_average_returns(avg_return_values, "SARSA_agent", id, agent.eps)
-        
-#         # Visualize first ten iterations
-#         print("Done. Visualizing ten episodes . . .")
-#         task.visualize_episode(plot=True, name=f"Plots/SARSA_agent/{id}/visualization")
-       
-        
-# def task_2_Q(n_episodes=1000, id = minihack_env.EMPTY_ROOM, plot_and_render = True, **kwargs):
-    
-#     print("Hello, this is task 2, Q-learning agent.")
-    
-#     # Get the ID and environment
-#     print(f"Environment: {id}")
-#     max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else max_episode_steps_dict[id]
-#     kwargs["max_episode_steps"] = max_episode_steps
-    
-#     save_name = f"Plots/Q_agent/{id}/"
-#     env = minihack_env.get_minihack_environment(id, add_pixel="True", max_episode_steps=max_episode_steps)
-#     state = env.reset()
-#     # Define the agent
-#     agent = QAgent("0", save_name, **kwargs)
-#     print(f"Eps: {agent.eps}")
-#     print(f"Max steps episode: {agent.max_episode_steps}")
-#     # Define the RL task
-#     task = RLTask(env, agent, save_name)
-#     avg_return_values = task.interact(n_episodes)
-    
-#     if plot_and_render:    
-#         print("Done, plotting average returns . . . ")
-#         plot_average_returns(avg_return_values, "Q_agent", id, agent.eps)
-#         # Visualize first ten iterations
-#         print("Done. Visualizing ten episodes . . .")
-#         task.visualize_episode(plot=True, name=f"Plots/Q_agent/{id}/visualization")
+
         
         
 def task_2(agent_name, id, n_episodes=1000, **kwargs):
@@ -192,24 +108,27 @@ def task_2(agent_name, id, n_episodes=1000, **kwargs):
     avg_return_values = task.interact(n_episodes)
     
     print("Done, plotting average returns . . . ")
-    plot_average_returns(avg_return_values, "Q_agent", id, agent.eps)
+    plot_average_returns(avg_return_values, f"{agent_name}", id, agent.eps)
+    
+    # Make visualizations
+    
+    print("Done. Visualizing episodes . . .")
+    task.visualize_episode(agent_name, name=f"Plots/{agent_name}/{id}/plots/visualization")  
+    
+    print("Done. Visualizing episodes with Q values . . .")
+    task.visualize_episode(agent_name, plot_Q=True, name=f"Plots/{agent_name}/{id}/plots/visualization_with_Q")  
+    
     # Visualize first ten iterations
-    print("Done. Visualizing ten episodes . . .")
-    task.visualize_episode(plot=True, name=f"Plots/Q_agent/{id}/visualization")    
+    print("Done. Creating mozaic of 10 episodes . . .")
+    task.mozaic_episode(agent_name, f"Plots/{agent_name}/{id}/")    
         
-# def test_saving_and_loading():
-#     # Learn a lot
-#     task_2_SARSA(n_episodes=1000)
-#     # Then load and use the learned policy
-#     task_2_SARSA(n_episodes=1, load_name = f"Plots/SARSA_agent/empty-room/")
         
 def main():
-    # id = minihack_env.EMPTY_ROOM
-    # Other ones:
-    
-    for agent_name in ["SARSA_agent", "Q_agent"]: # "MC_agent" 
-        for id in [minihack_env.ROOM_WITH_LAVA, minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]: # 
+    # Run all agents in all environments
+    for agent_name in ["SARSA_agent", "Q_agent"]: # "MC_agent" # MC agent is very slow... 
+        for id in [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]:
             task_2(agent_name=agent_name, id=id)
+    
 
 # Execute main test:
 if __name__ == "__main__":

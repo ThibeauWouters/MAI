@@ -33,13 +33,14 @@ class SARSAgent(AbstractAgent):
         
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
         
+        self.load_name = load_name
         
         # Internal state: has Q (default 0) and returns (default: empty list)
         # Either create empty memory or load from previous training
         if load_name=="":
             self.Q = defaultdict(default_Q_value_callable)
         else:
-            print("Loaded memory")
+            print("Loading memory")
             self.load_memory(load_name)
             
         self.save_name = save_name + "memory.pkl"
@@ -107,6 +108,11 @@ class SARSAgent(AbstractAgent):
         pass
     
     def save_memory(self):
+        
+        # Don't save if we are checking the polciy
+        if len(self.load_name) > 0:
+            pass
+        
         # Open a file and use dump()
         with open(self.save_name, 'wb') as file:
             pickle.dump(self.Q, file)

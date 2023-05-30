@@ -31,13 +31,15 @@ class MCAgent(AbstractAgent):
         self.gamma    = gamma
         
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
-
+        
+        self.load_name = load_name
 
         # Memory has Q-values and n, the number of updates, to compute an incremental average
         # Either create empty memory or load from previous training
         if load_name=="":
-            self.memory = defaultdict(default_memory_value_callable)
+            self.Q = defaultdict(default_memory_value_callable)
         else:
+            print("Loading memory")
             self.load_memory(load_name)
             
         # For saving the agents' policy:
@@ -50,7 +52,7 @@ class MCAgent(AbstractAgent):
             Get action in current state according to epsilon greedy policy
             """
             
-            Q_of_actions = np.array([self.memory[(state, action)][0] for action in self.action_space])
+            Q_of_actions = np.array([self.Q[(state, action)][0] for action in self.action_space])
             # Check where Q value is maximal, can be multiple, so sample arbitrarily
             argmax_indices = np.argwhere(Q_of_actions == np.max(Q_of_actions)).flatten()
             argmax_index = np.random.choice(argmax_indices)
@@ -89,7 +91,7 @@ class MCAgent(AbstractAgent):
         """
         
         if VERBOSE:
-            print(self.memory)
+            print(self.Q)
         
         # Initialize G
         g_value = 0
@@ -126,23 +128,27 @@ class MCAgent(AbstractAgent):
             # Do the update rule
             if update:
                 # Get previous value of this (S, A) pair
-                prev_avg, n = self.memory[(state, action)]
+                prev_avg, n = self.Q[(state, action)]
                 # Do an incremental avg and store as new value:
                 new_avg = incremental_avg(prev_avg, g_value, n)
-                self.memory[(state, action)] = np.array([new_avg, n+1])
+                self.Q[(state, action)] = np.array([new_avg, n+1])
                 
     def onIterationEnd(self, iteration_counter, next_state):
         pass
     
     def save_memory(self):
         
+        # Don't save if we are checking the polciy
+        if len(self.load_name) > 0:
+            pass
+        
         # Open a file and use dump()
         with open(self.save_name, 'wb') as file:
-            pickle.dump(self.memory, file)
+            pickle.dump(self.Q, file)
             
     def load_memory(self, load_name):
         load_name += "memory.pkl"
         
         # Open a file and use dump()
         with open(load_name, 'rb') as file:
-            self.memory = pickle.load(file)
+            self.Q = pickle.load(file)

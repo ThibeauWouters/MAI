@@ -32,10 +32,13 @@ class QAgent(AbstractAgent):
 
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
         
+        self.load_name = load_name
+        
         # Internal state: has Q (default 0) and returns (default: empty list)
         if load_name=="":
             self.Q = defaultdict(default_Q_value_callable)
         else:
+            
             self.load_memory(load_name)
             
         self.save_name = save_name + "memory.pkl"
@@ -102,6 +105,11 @@ class QAgent(AbstractAgent):
     
     def save_memory(self):
         
+        # Don't save if we are checking the polciy
+        if len(self.load_name) > 0:
+            print("Not saving memory")
+            pass
+        
         # Open a file and use dump()
         with open(self.save_name, 'wb') as file:
             pickle.dump(self.Q, file)
@@ -110,5 +118,7 @@ class QAgent(AbstractAgent):
         load_name += "memory.pkl"
         
         # Open a file and use dump()
+        print(f"Loading memory from {load_name}")
         with open(load_name, 'rb') as file:
             self.Q = pickle.load(file)
+            print(self.Q)

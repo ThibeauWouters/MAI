@@ -4,31 +4,15 @@ import minihack
 from nle import nethack
 from minihack import RewardManager
 
-import numpy as np
-
 
 ACTIONS = tuple(nethack.CompassCardinalDirection)
-# ACTIONS = [0, 1, 2, 3]
-
-def translate_action(action):
-    """Simple auxiliary function that translates an action from ACTION to its compass direction as str."""
-    if action == 0:
-        return "N"
-    elif action == 1:
-        return "E"
-    elif action == 2:
-        return "S"
-    elif action == 3:
-        return "W"
-    else:
-        # If action not recognized, return original
-        return action
-    
 EMPTY_ROOM = "empty-room"
 ROOM_WITH_LAVA_MODIFIED = "room-with-lava-modified"
 ROOM_WITH_LAVA = "room-with-lava"
 ROOM_WITH_MONSTER = "room-with-monster"
 CLIFF = "cliff-minihack"
+
+
 
 
 des_room_with_lava ="""
@@ -46,6 +30,9 @@ MAP
 ENDMAP
 """
 
+
+
+
 des_cliff="""
 MAZE: "mylevel", ' '
 FLAGS:premapped
@@ -61,6 +48,8 @@ MAP
 ENDMAP
 """
 
+
+
 des_monster = """
 MAZE: "mylevel", ' '
 FLAGS:premapped
@@ -75,9 +64,6 @@ ENDMAP
 REGION: (0,0,20,80), lit, "ordinary"
 MONSTER: ('Z', "ghoul"), (2,4)
 """
-
-
-# Methods given by assignment:
 
 """Reshaping rewards with death levels"""
 class DoNotResetWhenDead(gym.Wrapper):
@@ -118,7 +104,7 @@ class DoNotResetWhenDead(gym.Wrapper):
 
 
 
-def get_minihack_environment(id, **kwargs):
+def get_minihack_envirnment(id, **kwargs):
 
     size = kwargs["size"] if "size" in kwargs else 5
     random = kwargs["random"] if "random" in kwargs else False
@@ -149,7 +135,7 @@ def get_minihack_environment(id, **kwargs):
             max_episode_steps=max_episode_steps,
             observation_keys=obs
         )
-        
+
         env = DoNotResetWhenDead(env, max_episode_steps)
     elif id == ROOM_WITH_LAVA:
         des_file = des_room_with_lava
@@ -183,21 +169,19 @@ def get_minihack_environment(id, **kwargs):
         )
         env = DoNotResetWhenDead(env, max_episode_steps)
     elif id == ROOM_WITH_MONSTER:
-            des_file = des_monster
-            if not random:
-                cont = """STAIR:(4,4),down \nBRANCH: (0,0,0,0),(1,1,1,1) \n"""
-                des_file += cont
+        des_file = des_monster
+        if not random:
+            cont = """STAIR:(4,4),down \nBRANCH: (0,0,0,0),(1,1,1,1) \n"""
+            des_file += cont
 
-            env = gym.make(
-                "MiniHack-Navigation-Custom-v0",
-                actions=ACTIONS,
-                des_file=des_file,
-                max_episode_steps=max_episode_steps,
-                observation_keys=obs
-            )
-            env = DoNotResetWhenDead(env, max_episode_steps)
-
-
+        env = gym.make(
+            "MiniHack-Navigation-Custom-v0",
+            actions=ACTIONS,
+            des_file=des_file,
+            max_episode_steps=max_episode_steps,
+            observation_keys=obs
+        )
+        env = DoNotResetWhenDead(env, max_episode_steps)
     else:
         raise Exception("Environment %s not found" % str(id))
 
