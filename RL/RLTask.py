@@ -7,7 +7,7 @@ import pickle
 
 class RLTask():
 
-    def __init__(self, env: gym.Env, agent: AbstractAgent, save_name):
+    def __init__(self, env: gym.Env, agent: AbstractAgent, save_name, start_exploitation=990):
         """
         This class abstracts the concept of an agent interacting with an environment.
 
@@ -18,10 +18,12 @@ class RLTask():
 
         self.env   = env
         self.agent = agent
-        # For saving the returns during a run:
         self.save_name = save_name + "returns.csv"
-        # Only save if agent has not loaded memory
+        # ^ for saving the returns during a run:
+        self.start_exploitation = start_exploitation
+        # ^ turn off exploration at end of learning
         
+        # Only save if agent has not loaded memory
         if len(self.agent.load_name) == 0:
             print("RLTask is saving returns")
             self.save_returns = True
@@ -77,6 +79,11 @@ class RLTask():
             # Let the agent learn after end of episode:
             self.agent.onEpisodeEnd(iteration_counter)
             
+            # After sufficiently episodes, go from eps-greedy to full greedy
+            if i > self.start_exploitation:
+                # print("Turning of exploration")
+                self.agent.eps = 0
+            
             # Episode is over, compute return
             return_value = np.sum(self.agent.rewards_list)
             # Append the return to the list of returns
@@ -103,11 +110,12 @@ class RLTask():
         
         if plot_Q:
             nb_plots = 2
+            fig, axs = plt.subplots(1, nb_plots, figsize=(11,5), gridspec_kw={'width_ratios': [2, 1]})
         else:
             nb_plots = 1
         
         # Reset environment
-        fsize = 16  # font size for the title
+        fsize = 12  # font size for the title
         state = self.env.reset()
         print("=== Starting state: === \n")
         self.env.render()
@@ -122,6 +130,7 @@ class RLTask():
         
         # Reconstruct the episode from the actions and information of the environment
         done=False
+        agent_name = agent_id.replace("_", " ")
         for i, action in enumerate(self.agent.actions_list):
             # Check if done, then finished
             if done:
@@ -141,15 +150,16 @@ class RLTask():
                 plt.imshow(get_crop_pixel_from_observation(state))
                 plt.xticks([])
                 plt.yticks([])
-                plt.title(f"t = {i+1} ({agent_id}, {action})", fontsize = fsize)
+                plt.title(f"t = {i+1} ({agent_name}, {action})", fontsize = fsize)
                 
                 # Plot the Q values for that state as well
-                if plot_Q:
+                if plot_Q and i > 0:
                     plt.subplot(1, nb_plots, 2)
                     # Get Q values, need char not pixel state
                     char_state = get_crop_chars_from_observation(state)
                     q_vals = [self.agent.Q[(np_hash(char_state), a)] for a in [0, 1, 2, 3]]
-                    plt.bar(["N", "E", "S", "W"], q_vals, color="blue", zorder=100)
+                    plt.plot([0, 1, 2, 3], q_vals, "-o", color="blue", zorder=100)
+                    plt.xticks([0, 1, 2, 3], ["N", "E", "S", "W"])
                     plt.grid()
                     plt.title("Q values")
                 # Save and close

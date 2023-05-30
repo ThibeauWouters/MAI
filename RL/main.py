@@ -116,7 +116,7 @@ def task_2(agent_name, id, n_episodes=1000, **kwargs):
     task.visualize_episode(agent_name, name=f"Plots/{agent_name}/{id}/plots/visualization")  
     
     print("Done. Visualizing episodes with Q values . . .")
-    task.visualize_episode(agent_name, plot_Q=True, name=f"Plots/{agent_name}/{id}/plots/visualization_with_Q")  
+    task.visualize_episode(agent_name, plot_Q=True, name=f"Plots/{agent_name}/{id}/plots/Q")  
     
     # Visualize first ten iterations
     print("Done. Creating mozaic of 10 episodes . . .")
@@ -124,10 +124,12 @@ def task_2(agent_name, id, n_episodes=1000, **kwargs):
         
         
 def main():
-    # Run all agents in all environments
+    ### Run all agents in all environments
     for agent_name in ["SARSA_agent", "Q_agent"]: # "MC_agent" # MC agent is very slow... 
         for id in [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]:
             task_2(agent_name=agent_name, id=id)
+    
+    # task_2(agent_name="SARSA_agent", id=minihack_env.EMPTY_ROOM, n_episodes=50)
     
 
 # Execute main test:
