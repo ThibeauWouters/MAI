@@ -28,6 +28,7 @@ class AbstractAgent():
         # Flag that you can change for distinguishing whether the agent is used for learning or for testing.
         # You may want to disable some behaviour when not learning (e.g. no update rule, no exploration eps = 0, etc.)
         self.learning = True
+        self.load_name=""
         
     def reset_lists(self):
         self.states_list  = np.zeros(self.max_episode_steps, dtype=int)
@@ -66,11 +67,11 @@ class AbstractAgent():
         """
         pass
     
-    def save_memory(self, save_name):
-        pass
+    # def save_memory(self):
+    #     pass
             
-    def load_memory(self, load_name):
-        pass
+    # def load_memory(self, load_name):
+    #     pass
 
 
 class AbstractRLTask():
@@ -155,15 +156,21 @@ def have_common_element(arr1: np.array, arr2: np.array) -> bool:
     """
     Checks whether arr1 and arr2 have at leasts one common element
     """
-    common_elements = np.intersect1d(arr1, arr2)
+    common_elements = np.intersect1d(arr1, arr2, assume_unique=True)
     return len(common_elements) > 0
+
+def appears_earlier(state, action, states_list, actions_list, t):
+    # Iterate over all previous timesteps
+    for t_earlier in range(0, t):    
+        # If St and At agree, then true
+        if state == states_list[t_earlier] and action == actions_list[t_earlier]:      
+            return True
+
+    return False 
 
 
 def incremental_avg(prev_avg, new_val, n):
-    if n == 0:
-        return new_val
-    else:
-        return prev_avg + (new_val - prev_avg)/n
+        return (n)/(n+1) * prev_avg + (new_val)/(n+1)
     
 
 def np_hash(arr):

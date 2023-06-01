@@ -52,3 +52,5 @@ class GridWorld(gym.Env):
                     output += '>'
             output += '\n'
         print(output)
+        
+        return grid

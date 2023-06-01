@@ -15,8 +15,8 @@ def default_memory_value_callable():
 
 class MCAgent(AbstractAgent):
 
-    def __init__(self, id, save_name, action_space=np.array([0,1,2,3], dtype=int), eps = 0.05, gamma = 1.0, 
-                 max_episode_steps=50, load_name=""):
+    def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), alpha=0.1, eps = 0.05, gamma = 1.0, 
+                 max_episode_steps=50, eps_period = None):
         """
         An abstract interface for an agent.
 
@@ -29,22 +29,20 @@ class MCAgent(AbstractAgent):
         self.learning = True
         self.eps      = eps
         self.gamma    = gamma
+        self.alpha    = alpha
         
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
         
-        self.load_name = load_name
+        self.train_counter = 0
+        if eps_period is None:
+            eps_period = max_episode_steps // 2
+        self.eps_period = eps_period
+        print(f"MC scheduler: eps_period: {eps_period}")
+        # ^ count amount of training, to adapt eps
+
 
         # Memory has Q-values and n, the number of updates, to compute an incremental average
-        # Either create empty memory or load from previous training
-        if load_name=="":
-            self.Q = defaultdict(default_memory_value_callable)
-        else:
-            print("Loading memory")
-            self.load_memory(load_name)
-            
-        # For saving the agents' policy:
-        self.save_name = save_name + "memory.pkl"
-            
+        self.Q = defaultdict(default_memory_value_callable)
         
         
     def policy(self, state):
@@ -89,66 +87,33 @@ class MCAgent(AbstractAgent):
         :param episode: the episode number
         :return:
         """
-        
-        if VERBOSE:
-            print(self.Q)
-        
         # Initialize G
         g_value = 0
         
-        # Limit the lists:
-        self.actions_list = self.actions_list[:iteration_counter]
-        self.states_list  = self.states_list[:iteration_counter]
-        self.rewards_list = self.rewards_list[:iteration_counter]
-        
-        # Reverse lists: go from T to 0
-        self.actions_list = np.array(self.actions_list[::-1])
-        self.states_list  = np.array(self.states_list[::-1])
-        self.rewards_list = np.array(self.rewards_list[::-1])
-        
         # Go over lists rewards, from T-1 to 0
-        for t in range(1, len(self.actions_list)):
+        for t in range(iteration_counter - 2, -1, -1):
             
             # G <- gamma G + R_{t+1}
-            g_value = self.gamma * g_value + self.rewards_list[t-1]
+            g_value = self.gamma * g_value + self.rewards_list[t+1]
             # Get this timestep's state and action
-            state  = self.states_list[t]
-            action = self.actions_list[t]
+            state  = self.states_list[t]  # St
+            action = self.actions_list[t]  # At
             
-            # Check whether we have to update: certainly at end of array
-            update = False  
-            if t == len(self.actions_list - 1):
-                update = True
-            else:
-                # If (S, A) reappears earlier in trajectory, we update later
-                same_states_indices  = np.argwhere(self.states_list[t+1:]  == state).flatten()
-                same_actions_indices = np.argwhere(self.actions_list[t+1:] == action).flatten()
-                update = not(have_common_element(same_states_indices, same_actions_indices))
-                
             # Do the update rule
-            if update:
+            if not appears_earlier(state, action, self.states_list, self.actions_list, t):
                 # Get previous value of this (S, A) pair
                 prev_avg, n = self.Q[(state, action)]
                 # Do an incremental avg and store as new value:
                 new_avg = incremental_avg(prev_avg, g_value, n)
                 self.Q[(state, action)] = np.array([new_avg, n+1])
                 
+        # Eps scheduler: check if we have to adapt eps
+        self.train_counter += 1
+        if self.train_counter % self.eps_period == 0:
+            # Change exploration rate 
+            self.eps *= 0.5
+            print(f"Changing eps to {self.eps}")
+            
+                
     def onIterationEnd(self, iteration_counter, next_state):
         pass
-    
-    def save_memory(self):
-        
-        # Don't save if we are checking the polciy
-        if len(self.load_name) > 0:
-            pass
-        
-        # Open a file and use dump()
-        with open(self.save_name, 'wb') as file:
-            pickle.dump(self.Q, file)
-            
-    def load_memory(self, load_name):
-        load_name += "memory.pkl"
-        
-        # Open a file and use dump()
-        with open(load_name, 'rb') as file:
-            self.Q = pickle.load(file)

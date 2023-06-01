@@ -126,6 +126,7 @@ def get_minihack_environment(id, **kwargs):
     max_episode_steps = kwargs["max_episode_steps"] if "max_episode_steps" in kwargs else 1000
     obs = ["chars", ]
     if add_pixels:
+        print("Added pixels")
         obs = ["chars", "pixel"]
 
     if id == EMPTY_ROOM:

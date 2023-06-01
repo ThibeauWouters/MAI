@@ -1,13 +1,16 @@
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import numpy as np
 from tqdm import tqdm
 import gym 
 from commons import *
 import pickle
+from GridWorld import GridWorld
+import os
 
 class RLTask():
 
-    def __init__(self, env: gym.Env, agent: AbstractAgent, save_name, start_exploitation=990):
+    def __init__(self, env: gym.Env, agent: AbstractAgent, room_id, save_returns=True):
         """
         This class abstracts the concept of an agent interacting with an environment.
 
@@ -18,20 +21,19 @@ class RLTask():
 
         self.env   = env
         self.agent = agent
-        self.save_name = save_name + "returns.csv"
-        # ^ for saving the returns during a run:
-        self.start_exploitation = start_exploitation
-        # ^ turn off exploration at end of learning
-        
-        # Only save if agent has not loaded memory
-        if len(self.agent.load_name) == 0:
+        self.room_id = room_id
+        # To save the returns:
+        self.save_returns = save_returns
+        if save_returns:
             print("RLTask is saving returns")
+            self.save_name = f"Plots/{agent.id}/{room_id}/returns.csv"
+            # Initialize the CSV file for the returns
             self.save_returns = True
             f = open(self.save_name, "w")
             f.close()
         else:
-            print("RLTask is not saving returns")
-            self.save_returns = False
+            print("RLTask is NOT saving returns")
+            
 
     def interact(self, n_episodes: int) -> float:
         """
@@ -66,23 +68,20 @@ class RLTask():
                 # Agent chooses interaction and interacts with environment
                 action = self.agent.act(state, reward)  
                 observation, reward, done, _ = self.env.step(action)
-                next_state = get_crop_chars_from_observation(observation)
                 # Save chosen action and observed reward
                 self.agent.actions_list[iteration_counter] = action
                 self.agent.rewards_list[iteration_counter] = reward
-                # Iteration ends, make agent learn
-                self.agent.onIterationEnd(iteration_counter, np_hash(next_state))
+                # Iteration ends, make agent learn (if learning agent)
+                next_state = get_crop_chars_from_observation(observation)
+                if self.agent.learning:
+                    self.agent.onIterationEnd(iteration_counter, np_hash(next_state))
                 # Update state and counter
                 state = next_state
                 iteration_counter += 1
             
             # Let the agent learn after end of episode:
-            self.agent.onEpisodeEnd(iteration_counter)
-            
-            # After sufficiently episodes, go from eps-greedy to full greedy
-            if i > self.start_exploitation:
-                # print("Turning of exploration")
-                self.agent.eps = 0
+            if self.agent.learning:
+                self.agent.onEpisodeEnd(iteration_counter)
             
             # Episode is over, compute return
             return_value = np.sum(self.agent.rewards_list)
@@ -91,16 +90,13 @@ class RLTask():
             # Compute the average of the first episodes
             avg_returns_list[i] = np.mean(returns_list[:i+1])
             
+            # If desired, save the average return to filename
             if self.save_returns:
-                # If filename given, save avg return to filename
                 write_to_txt(self.save_name, [return_value])
-                # Save agent's policy for observation later on:
-                self.agent.save_memory()
             
         return avg_returns_list
 
-    def visualize_episode(self, agent_id, max_number_steps: int = 25, plot=True,
-                          plot_Q = False, name="visualization", title=""):
+    def visualize_episode(self, max_number_steps: int = 25, plot=True, plot_Q = False, render=True):
         """
         This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
         You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
@@ -108,29 +104,41 @@ class RLTask():
         :return:
         """
         
+        print(f"Visualizing for max: {max_number_steps}")
+        
+        # Plotting Q values as well:
         if plot_Q:
             nb_plots = 2
+            name = "Q"
             fig, axs = plt.subplots(1, nb_plots, figsize=(11,5), gridspec_kw={'width_ratios': [2, 1]})
         else:
+            name = "visualization"
             nb_plots = 1
+            
+        # Clear directory and specify save location the directory
+        directory = f"Plots/{self.agent.id}/{self.room_id}/plots/"
+        # for f in os.listdir(directory):
+        #     os.remove(f)
+        save_location = f"{directory}{name}"
         
         # Reset environment
         fsize = 12  # font size for the title
         state = self.env.reset()
         print("=== Starting state: === \n")
-        self.env.render()
+        if render:
+            self.env.render()
         if plot:
             plt.imshow(get_crop_pixel_from_observation(state))
             plt.xticks([])
             plt.yticks([])
             plt.title(f"Start", fontsize = fsize)
-            plt.savefig(f"{name}_{0}.png", bbox_inches='tight')
+            plt.savefig(f"{save_location}_{0}.png", bbox_inches='tight')
             plt.close()
         print("\n")
         
         # Reconstruct the episode from the actions and information of the environment
         done=False
-        agent_name = agent_id.replace("_", " ")
+        agent_name = self.agent.id.replace("_", " ")
         for i, action in enumerate(self.agent.actions_list):
             # Check if done, then finished
             if done:
@@ -141,7 +149,8 @@ class RLTask():
             action = minihack_env.translate_action(action)
             # Render the environment to the screen:
             print(f"=== State {i+1}: (action = {action}) === \n")
-            self.env.render()
+            if render:
+                self.env.render()
             print("\n")
             # Save pixel plots to .png if desired
             if plot and not done:
@@ -163,13 +172,14 @@ class RLTask():
                     plt.grid()
                     plt.title("Q values")
                 # Save and close
-                plt.savefig(f"{name}_{i+1}.png", bbox_inches='tight')
+                plt.savefig(f"{save_location}_{i+1}.png", bbox_inches='tight')
                 plt.close()
+                
             # Stop rendering after specified max number steps is reached
             if i+1 == max_number_steps:
                 return
 
-    def mozaic_episode(self, agent_id, name):
+    def mozaic_episode(self, figsize=(10,4)):
         """
         This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
         You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
@@ -182,16 +192,21 @@ class RLTask():
         done = False
         state = self.env.reset()
         
-        fig, axs = plt.subplots(2, 5, figsize = (8,4))
+        fig, axs = plt.subplots(2, 5, figsize=figsize)
         
         i = 0
         reward = 0
         for row in axs:
             for ax in row:
-                if done:
-                    break
                 # Plot previous state
                 ax.imshow(get_crop_pixel_from_observation(state))
+                if i == 0:
+                    ax.set_title(f"Start", fontsize = fsize)
+                else: 
+                    ax.set_title(f"t = {i+1}, {action}", fontsize = fsize)
+                # Check termination 
+                if done:
+                    break
                 # Make a step in the environment
                 action = self.agent.actions_list[i]
                 # Otherwise, can make a step in the environment
@@ -199,14 +214,8 @@ class RLTask():
                 # Translate this action into readable language
                 action = minihack_env.translate_action(action)
                 # Render the environment to the screen:
-                self.env.render()
-                if done:
-                    break
-                if i == 0:
-                    ax.set_title(f"Start", fontsize = fsize)
-                else: 
-                    ax.set_title(f"t = {i+1}, {action}", fontsize = fsize)
-                    
+                # self.env.render()
+                # Increment counter
                 i += 1
                 
         # Now remove all ticks:
@@ -215,7 +224,13 @@ class RLTask():
                 ax.set_xticks([])
                 ax.set_yticks([])
                 
+        # Check if we terminated before, delete those axes
+        for j in range(i, 10):
+            fig.delaxes(axs[j//5, j%5])
+                
         # Save it
-        plt.savefig(f"{name}mozaic.png", bbox_inches='tight')
+        plt.savefig(f"Plots/{self.agent.id}/{self.room_id}/plots/mozaic.png", bbox_inches='tight')
+        plt.savefig(f"Plots/{self.agent.id}/{self.room_id}/plots/mozaic.pdf", bbox_inches='tight')
         plt.close()
+        
         

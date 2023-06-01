@@ -15,8 +15,8 @@ def default_Q_value_callable():
 
 class SARSAgent(AbstractAgent):
 
-    def __init__(self, id, save_name, action_space=np.array([0,1,2,3]), alpha = 0.1, eps = 0.05, gamma = 1.0, 
-                 max_episode_steps=50, load_name=""):
+    def __init__(self, id, action_space=np.array([0,1,2,3]), alpha = 0.1, eps = 0.05, gamma = 1.0, 
+                 max_episode_steps=50):
         """
         An abstract interface for an agent.
 
@@ -33,17 +33,9 @@ class SARSAgent(AbstractAgent):
         
         self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
         
-        self.load_name = load_name
-        
         # Internal state: has Q (default 0) and returns (default: empty list)
-        # Either create empty memory or load from previous training
-        if load_name=="":
-            self.Q = defaultdict(default_Q_value_callable)
-        else:
-            print("Loading memory")
-            self.load_memory(load_name)
-            
-        self.save_name = save_name + "memory.pkl"
+        self.Q = defaultdict(default_Q_value_callable)
+        
     
     def policy(self, state):
             """
@@ -106,20 +98,3 @@ class SARSAgent(AbstractAgent):
         """
         
         pass
-    
-    def save_memory(self):
-        
-        # Don't save if we are checking the polciy
-        if len(self.load_name) > 0:
-            pass
-        
-        # Open a file and use dump()
-        with open(self.save_name, 'wb') as file:
-            pickle.dump(self.Q, file)
-            
-    def load_memory(self, load_name):
-        load_name += "memory.pkl"
-        
-        # Open a file and use dump()
-        with open(load_name, 'rb') as file:
-            self.Q = pickle.load(file)

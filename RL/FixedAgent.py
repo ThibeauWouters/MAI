@@ -1,21 +1,23 @@
 import minihack_env
 from commons import *
 
-class FixedAgent():
+class FixedAgent(AbstractAgent):
 
-    def __init__(self, id):
+    def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), max_episode_steps=50):
         """
         An abstract interface for an agent.
 
         :param id: it is a str-unique identifier for the agent
         :param action_space: some representation of the action that an agents can do (e.g. gym.Env.action_space)
         """
-        self.id = id
-        self.action_space = minihack_env.ACTIONS
+        
+        super().__init__(id, action_space=action_space, max_episode_steps=max_episode_steps)
+        
+        # self.action_space = minihack_env.ACTIONS
         self.learning = True
         # First, keep on going down, then, keep on going left
         self.first_action = 2
-        self.second_action = 1 
+        self.second_action = 1
         self.fixed_action = self.first_action 
         self.turned = False
 
@@ -33,26 +35,24 @@ class FixedAgent():
         if not self.turned:
             # Else, check if we can still do first action, otherwise turn
             # observation = get_crop_chars_from_observation(state)
+            # print(state)
             position = np.argwhere(state == 64)[0]
             x, y = position
             n, m = state.shape
-            next_x, next_y = get_next_grid_position(x, y, self.fixed_action, n, m)
-            if state[next_x, next_y] != 46:
+            next_y, next_x = get_next_grid_position(x, y, self.fixed_action, n, m)
+            if state[next_y, next_x] != 46:
                 # Turn the agent
                 self.fixed_action = self.second_action
                 self.turned = True
         
         return self.fixed_action
+    
+    def onEpisodeEnd(self, iteration_counter):
+        # Reset the agent's behaviour
+        self.fixed_action = self.first_action
+        self.turned=False
+        return 
         
 
-    def onEpisodeEnd(self):
-        """
-        This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
-        end of an episode.
-        :param reward: the reward obtained in the last step
-        :param episode: the episode number
-        :return:
-        """
+    def save_memory(self): 
         pass
-
-
