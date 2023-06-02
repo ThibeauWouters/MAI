@@ -7,7 +7,7 @@ import pickle
 
 VERBOSE = False
 
-default_memory_value = np.array([0, 0])
+default_memory_value = [0, 0]
 
 def default_memory_value_callable():
     return default_memory_value
@@ -16,7 +16,7 @@ def default_memory_value_callable():
 class MCAgent(AbstractAgent):
 
     def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), alpha=0.1, eps = 0.05, gamma = 1.0, 
-                 max_episode_steps=50, eps_period = None):
+                 max_episode_steps=50, eps_period = 9999999):
         """
         An abstract interface for an agent.
 
@@ -31,11 +31,7 @@ class MCAgent(AbstractAgent):
         self.gamma    = gamma
         self.alpha    = alpha
         
-        self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
-        
         self.train_counter = 0
-        if eps_period is None:
-            eps_period = max_episode_steps // 2
         self.eps_period = eps_period
         print(f"MC scheduler: eps_period: {eps_period}")
         # ^ count amount of training, to adapt eps
@@ -50,12 +46,14 @@ class MCAgent(AbstractAgent):
             Get action in current state according to epsilon greedy policy
             """
             
+            high_probability = 1 - self.eps + self.eps/len(self.action_space)
+            
             Q_of_actions = np.array([self.Q[(state, action)][0] for action in self.action_space])
             # Check where Q value is maximal, can be multiple, so sample arbitrarily
             argmax_indices = np.argwhere(Q_of_actions == np.max(Q_of_actions)).flatten()
             argmax_index = np.random.choice(argmax_indices)
             
-            if np.random.rand() < self.high_probability:
+            if np.random.rand() < high_probability:
                 action = argmax_index
             else:
                 action = np.random.choice(self.action_space[self.action_space != argmax_index])
@@ -105,7 +103,7 @@ class MCAgent(AbstractAgent):
                 prev_avg, n = self.Q[(state, action)]
                 # Do an incremental avg and store as new value:
                 new_avg = incremental_avg(prev_avg, g_value, n)
-                self.Q[(state, action)] = np.array([new_avg, n+1])
+                self.Q[(state, action)] = [new_avg, n+1]
                 
         # Eps scheduler: check if we have to adapt eps
         self.train_counter += 1

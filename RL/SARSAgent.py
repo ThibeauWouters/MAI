@@ -31,8 +31,6 @@ class SARSAgent(AbstractAgent):
         self.gamma    = gamma
         self.alpha    = alpha
         
-        self.high_probability = 1 - self.eps + self.eps/len(self.action_space)
-        
         # Internal state: has Q (default 0) and returns (default: empty list)
         self.Q = defaultdict(default_Q_value_callable)
         
@@ -42,12 +40,14 @@ class SARSAgent(AbstractAgent):
             Get action in current state according to epsilon greedy policy
             """
             
+            high_probability = 1 - self.eps + self.eps/len(self.action_space)
+            
             Q_of_actions = np.array([self.Q[(state, action)] for action in self.action_space])
             # Check where Q value is maximal, can be multiple, so sample arbitrarily
             argmax_indices = np.argwhere(Q_of_actions == np.max(Q_of_actions)).flatten()
             argmax_index = np.random.choice(argmax_indices)
             
-            if np.random.rand() < self.high_probability:
+            if np.random.rand() < high_probability:
                 action = argmax_index
             else:
                 action = np.random.choice(self.action_space[self.action_space != argmax_index])

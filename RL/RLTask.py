@@ -6,6 +6,7 @@ import gym
 from commons import *
 import pickle
 from GridWorld import GridWorld
+from MCAgent import MCAgent
 import os
 
 class RLTask():
@@ -124,8 +125,8 @@ class RLTask():
         # Reset environment
         fsize = 12  # font size for the title
         state = self.env.reset()
-        print("=== Starting state: === \n")
         if render:
+            print("=== Starting state: === \n")
             self.env.render()
         if plot:
             plt.imshow(get_crop_pixel_from_observation(state))
@@ -134,7 +135,6 @@ class RLTask():
             plt.title(f"Start", fontsize = fsize)
             plt.savefig(f"{save_location}_{0}.png", bbox_inches='tight')
             plt.close()
-        print("\n")
         
         # Reconstruct the episode from the actions and information of the environment
         done=False
@@ -148,10 +148,9 @@ class RLTask():
             # Translate this action into readable language
             action = minihack_env.translate_action(action)
             # Render the environment to the screen:
-            print(f"=== State {i+1}: (action = {action}) === \n")
             if render:
+                print(f"=== State {i+1}: (action = {action}) === \n")
                 self.env.render()
-            print("\n")
             # Save pixel plots to .png if desired
             if plot and not done:
                 # Plot the state
@@ -167,7 +166,13 @@ class RLTask():
                     # Get Q values, need char not pixel state
                     char_state = get_crop_chars_from_observation(state)
                     q_vals = [self.agent.Q[(np_hash(char_state), a)] for a in [0, 1, 2, 3]]
-                    plt.plot([0, 1, 2, 3], q_vals, "-o", color="blue", zorder=100)
+                    if isinstance(self.agent, MCAgent):
+                        q_vals = np.array(q_vals)
+                        plt.plot([0, 1, 2, 3], q_vals[:, 0], "-o", color="blue", zorder=100, label = "Q")
+                        plt.plot([0, 1, 2, 3], q_vals[:, 1], "-o", color="red", zorder=100, label = "n")
+                        plt.legend()
+                    else:
+                        plt.plot([0, 1, 2, 3], q_vals, "-o", color="blue", zorder=100)
                     plt.xticks([0, 1, 2, 3], ["N", "E", "S", "W"])
                     plt.grid()
                     plt.title("Q values")
@@ -179,7 +184,7 @@ class RLTask():
             if i+1 == max_number_steps:
                 return
 
-    def mozaic_episode(self, figsize=(10,4)):
+    def mozaic_episode(self, figsize=(11,5)):
         """
         This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
         You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
@@ -194,39 +199,36 @@ class RLTask():
         
         fig, axs = plt.subplots(2, 5, figsize=figsize)
         
-        i = 0
+        # Now remove all ticks:
         reward = 0
-        for row in axs:
-            for ax in row:
-                # Plot previous state
-                ax.imshow(get_crop_pixel_from_observation(state))
-                if i == 0:
-                    ax.set_title(f"Start", fontsize = fsize)
-                else: 
-                    ax.set_title(f"t = {i+1}, {action}", fontsize = fsize)
-                # Check termination 
-                if done:
-                    break
+        for i in range(10):
+            ax = axs[i//5, i%5]
+            # Plot previous state
+            ax.imshow(get_crop_pixel_from_observation(state))
+            if i == 0:
+                ax.set_title(f"Start", fontsize = fsize)
+            else: 
+                ax.set_title(f"t = {i+1}, {action}", fontsize = fsize)
+            # Check termination 
+            if done:
+                for j in range(i, 10):
+                    fig.delaxes(axs[j//5, j%5])
+                break
+            else:
                 # Make a step in the environment
                 action = self.agent.actions_list[i]
                 # Otherwise, can make a step in the environment
                 state, _, done, _ = self.env.step(action)
                 # Translate this action into readable language
                 action = minihack_env.translate_action(action)
-                # Render the environment to the screen:
-                # self.env.render()
-                # Increment counter
-                i += 1
-                
-        # Now remove all ticks:
+            # Increment counter
+            i += 1
+            
         for row in axs:
             for ax in row:
                 ax.set_xticks([])
                 ax.set_yticks([])
                 
-        # Check if we terminated before, delete those axes
-        for j in range(i, 10):
-            fig.delaxes(axs[j//5, j%5])
                 
         # Save it
         plt.savefig(f"Plots/{self.agent.id}/{self.room_id}/plots/mozaic.png", bbox_inches='tight')
