@@ -139,8 +139,8 @@ def main():
     ### Task 2
     ## All agents
     
-    for agent_name in ["Q_agent"]: #   # MC agent is very slow... 
-        for room_id in [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA,  minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]: # , 
+    for agent_name in ["MC_agent", "SARSA_agent", "Q_agent"]: #   # MC agent is very slow... 
+        for room_id in [minihack_env.ROOM_WITH_LAVA_MODIFIED]:
             task_2(agent_name, room_id, n_episodes = 10000, eps = 0.1)
     
     ## Single agent
