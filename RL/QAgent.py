@@ -70,18 +70,18 @@ class QAgent(AbstractAgent):
     def onIterationEnd(self, iteration_counter, next_state):
         
         # Need at least one full "SARSA" to make an update, first iteration not possible
-        if iteration_counter == 0:
-            return
-        else:
-            # Get the state, action
-            state       = self.states_list[iteration_counter]
-            action      = self.actions_list[iteration_counter]
-            reward      = self.rewards_list[iteration_counter]
-            
-            # Update Q
-            previous_Q = self.Q[(state, action)]
-            new_Q = previous_Q + self.alpha * (reward + self.gamma * np.max([self.Q[(next_state, a)] for a in self.action_space]) - previous_Q)
-            self.Q[(state, action)] = new_Q
+        # if iteration_counter == 0:
+        #     return
+        # else:
+        # Get the state, action
+        state       = self.states_list[iteration_counter]
+        action      = self.actions_list[iteration_counter]
+        reward      = self.rewards_list[iteration_counter]
+        
+        # Update Q
+        previous_Q = self.Q[(state, action)]
+        new_Q = previous_Q + self.alpha * (reward + self.gamma * np.max([self.Q[(next_state, a)] for a in self.action_space]) - previous_Q)
+        self.Q[(state, action)] = new_Q
         
     def onEpisodeEnd(self, iteration_counter):
         """

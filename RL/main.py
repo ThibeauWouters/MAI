@@ -8,6 +8,7 @@ from FixedAgent import FixedAgent
 from MCAgent import MCAgent
 from SARSAgent import SARSAgent
 from QAgent import QAgent
+from DynaQAgent import DynaQAgent
 from RLTask import RLTask
 from RLTaskGridWorld import RLTaskGridWorld
 
@@ -86,6 +87,8 @@ def task_2(agent_name, room_id, n_episodes=1000, **kwargs):
         agent = SARSAgent("SARSA_agent", **kwargs)
     elif agent_name == "Q_agent":
         agent = QAgent("Q_agent", **kwargs)
+    elif agent_name == "DynaQ_agent":
+        agent = DynaQAgent("DynaQ_agent", **kwargs)
     else:
         print("Agent name not recognized")
         return
@@ -139,9 +142,9 @@ def main():
     ### Task 2
     ## All agents
     
-    for agent_name in ["MC_agent", "SARSA_agent", "Q_agent"]: #   # MC agent is very slow... 
-        for room_id in [minihack_env.ROOM_WITH_LAVA_MODIFIED]:
-            task_2(agent_name, room_id, n_episodes = 10000, eps = 0.1)
+    for agent_name in ["SARSA_agent"]: # "MC_agent", "SARSA_agent",  #   # MC agent is very slow... 
+        for room_id in [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]:
+            task_2(agent_name, room_id, n_episodes = 10000, eps = 0.1, alpha = 0.01)
     
     ## Single agent
     # task_2(agent_name="MC_agent", room_id=minihack_env.CLIFF, n_episodes=5000, eps = 0.1, eps_period = 99999)
