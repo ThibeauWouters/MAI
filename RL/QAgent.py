@@ -16,12 +16,6 @@ class QAgent(AbstractAgent):
 
     def __init__(self, id, action_space=np.array([0,1,2,3]), alpha = 0.1, eps = 0.05, gamma = 1.0, 
                  max_episode_steps=50):
-        """
-        An abstract interface for an agent.
-
-        :param id: it is a str-unique identifier for the agent
-        :param action_space: some representation of the action that an agents can do (e.g. gym.Env.action_space)
-        """
         
         super().__init__(id, action_space=action_space, max_episode_steps=max_episode_steps)
         
@@ -52,14 +46,6 @@ class QAgent(AbstractAgent):
             return action
 
     def act(self, state, reward=0):
-        """
-        This function represents the actual decision-making process of the agent. Given a 'state' and, possibly, a 'reward'
-        the agent returns an action to take in that state.
-        :param state: the state on which to act
-        :param reward: the reward computed together with the state (i.e. the reward on the previous action). Useful for learning
-        :params
-        :return:
-        """
         
         # Convert state to hashed state
         state = np_hash(state)
@@ -69,11 +55,7 @@ class QAgent(AbstractAgent):
     
     def onIterationEnd(self, iteration_counter, next_state):
         
-        # Need at least one full "SARSA" to make an update, first iteration not possible
-        # if iteration_counter == 0:
-        #     return
-        # else:
-        # Get the state, action
+        # Get the state, action, reward
         state       = self.states_list[iteration_counter]
         action      = self.actions_list[iteration_counter]
         reward      = self.rewards_list[iteration_counter]
@@ -84,13 +66,6 @@ class QAgent(AbstractAgent):
         self.Q[(state, action)] = new_Q
         
     def onEpisodeEnd(self, iteration_counter):
-        """
-        This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
-        end of an episode.
-        :param reward_list: Rewards collected during episode
-        :param episode: the episode number
-        :return:
-        """
         
-        pass
-    
+        # Reset the lists
+        self.reset_lists()

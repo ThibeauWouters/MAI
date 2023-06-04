@@ -16,7 +16,7 @@ from RLTaskGridWorld import RLTaskGridWorld
 
 ROOM_IDS = [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.CLIFF, minihack_env.ROOM_WITH_MONSTER]
 
-max_episode_steps_dict = {minihack_env.EMPTY_ROOM: 50, minihack_env.ROOM_WITH_LAVA:1000, minihack_env.ROOM_WITH_LAVA_MODIFIED:1000, minihack_env.CLIFF:1000, minihack_env.ROOM_WITH_MONSTER: 1000}
+max_episode_steps_dict = {minihack_env.EMPTY_ROOM: 1000, minihack_env.ROOM_WITH_LAVA:1000, minihack_env.ROOM_WITH_LAVA_MODIFIED:1000, minihack_env.CLIFF:1000, minihack_env.ROOM_WITH_MONSTER: 1000}
 
 def task_1_1(n=5, m=5, n_episodes=10000, max_steps_episode=50, agent_id = "random_agent"):
     
@@ -72,7 +72,7 @@ def task_1_2(n_episodes=1):
 ##########
 
         
-def task_2(agent_name, room_id, n_episodes=1000, **kwargs):
+def task_2(agent_name, room_id, n_episodes=1000, filename="return.txt", **kwargs):
     
     print(f"Agent: {agent_name}. Environment: {room_id}")
     
@@ -102,7 +102,9 @@ def task_2(agent_name, room_id, n_episodes=1000, **kwargs):
     task = RLTask(env, agent, room_id, save_returns=False)
     avg_return_values = task.interact(n_episodes)
     # Save return values to txt file
-    np.savetxt(f"Plots/{agent.id}/{room_id}/return.txt", avg_return_values)
+    save_location = f"Plots/{agent.id}/{room_id}/{filename}"
+    print(f"Saving returns to {save_location}")
+    np.savetxt(save_location, avg_return_values)
     
     # Now, get environment again, but now adding the pixel representation for plotting
     env = minihack_env.get_minihack_environment(room_id, add_pixel=True, max_episode_steps=max_episode_steps)
@@ -114,6 +116,7 @@ def task_2(agent_name, room_id, n_episodes=1000, **kwargs):
     state = env.reset()
     # Get a single interaction to check agent behaviour
     _ = task.interact(1)
+    print(agent.Q)
     
     # print("Done, plotting average returns . . . ")
     # plot_average_returns(avg_return_values, f"{agent_name}", id, agent.eps)
@@ -142,9 +145,9 @@ def main():
     ### Task 2
     ## All agents
     
-    for agent_name in ["SARSA_agent"]: # "MC_agent", "SARSA_agent",  #   # MC agent is very slow... 
-        for room_id in [minihack_env.EMPTY_ROOM, minihack_env.ROOM_WITH_LAVA, minihack_env.ROOM_WITH_MONSTER, minihack_env.CLIFF]:
-            task_2(agent_name, room_id, n_episodes = 10000, eps = 0.1, alpha = 0.01)
+    for agent_name in ["MC_agent", "SARSA_agent", "Q_agent"]: # "MC_agent", "SARSA_agent",  #   # MC agent is very slow... 
+        for room_id in [minihack_env.ROOM_WITH_LAVA_MODIFIED]:
+            task_2(agent_name, room_id, n_episodes = 10000, eps = 0.2)
     
     ## Single agent
     # task_2(agent_name="MC_agent", room_id=minihack_env.CLIFF, n_episodes=5000, eps = 0.1, eps_period = 99999)

@@ -48,6 +48,7 @@ class RLTask():
         returns_list = np.zeros(n_episodes)
         avg_returns_list = np.zeros(n_episodes)
         
+        # TO save the returns to check if there is a bug
         # Do the episodes
         for i in tqdm(range(n_episodes)):
             # Reset everything
@@ -60,6 +61,9 @@ class RLTask():
             
             # Clear states, actions and rewards lists
             self.agent.reset_lists()
+            
+            
+            all_rewards_list = []
             
             # Do an episode:
             iteration_counter = 0
@@ -80,12 +84,13 @@ class RLTask():
                 state = next_state
                 iteration_counter += 1
             
+            # Episode is over, compute return
+            return_value = np.sum(self.agent.rewards_list)
+            
             # Let the agent learn after end of episode:
             if self.agent.learning:
                 self.agent.onEpisodeEnd(iteration_counter)
             
-            # Episode is over, compute return
-            return_value = np.sum(self.agent.rewards_list)
             # Append the return to the list of returns
             returns_list[i] = return_value
             # Compute the average of the first episodes
@@ -98,12 +103,6 @@ class RLTask():
         return avg_returns_list
 
     def visualize_episode(self, max_number_steps: int = 25, plot=True, plot_Q = False, render=True):
-        """
-        This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
-        You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
-        :param max_number_steps: Optional, maximum number of steps to plot.
-        :return:
-        """
         
         print(f"Visualizing for max: {max_number_steps}")
         
@@ -168,9 +167,7 @@ class RLTask():
                     q_vals = [self.agent.Q[(np_hash(char_state), a)] for a in [0, 1, 2, 3]]
                     if isinstance(self.agent, MCAgent):
                         q_vals = np.array(q_vals)
-                        plt.plot([0, 1, 2, 3], q_vals[:, 0], "-o", color="blue", zorder=100, label = "Q")
-                        plt.plot([0, 1, 2, 3], q_vals[:, 1], "-o", color="red", zorder=100, label = "n")
-                        plt.legend()
+                        plt.plot([0, 1, 2, 3], q_vals[:, 0], "-o", color="blue", zorder=100)
                     else:
                         plt.plot([0, 1, 2, 3], q_vals, "-o", color="blue", zorder=100)
                     plt.xticks([0, 1, 2, 3], ["N", "E", "S", "W"])
@@ -186,11 +183,9 @@ class RLTask():
 
     def mozaic_episode(self, figsize=(11,5)):
         """
-        This function executes and plot an episode (or a fixed number 'max_number_steps' steps).
-        You may want to disable some agent behaviours when visualizing(e.g. self.agent.learning = False)
-        :param max_number_steps: Optional, maximum number of steps to plot.
-        :return:
+        Create a tile of 10 first steps for the agent, to shown the learned policy in the report.
         """
+        
         
         # Reset environment
         fsize = 12  # font size for the title
@@ -228,7 +223,6 @@ class RLTask():
             for ax in row:
                 ax.set_xticks([])
                 ax.set_yticks([])
-                
                 
         # Save it
         plt.savefig(f"Plots/{self.agent.id}/{self.room_id}/plots/mozaic.png", bbox_inches='tight')

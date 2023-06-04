@@ -17,11 +17,11 @@ class MCAgent(AbstractAgent):
 
     def __init__(self, id, action_space=np.array([0,1,2,3], dtype=int), alpha=0.1, eps = 0.05, gamma = 1.0, 
                  max_episode_steps=50, eps_period = 9999999):
+        
         """
-        An abstract interface for an agent.
-
-        :param id: it is a str-unique identifier for the agent
-        :param action_space: some representation of the action that an agents can do (e.g. gym.Env.action_space)
+        Initialze MC agent
+        
+        eps_period: if we use an exploration rate scheduler, than we divide eps by half after eps_period episodes
         """
         
         super().__init__(id, action_space=action_space, max_episode_steps=max_episode_steps)
@@ -61,14 +61,6 @@ class MCAgent(AbstractAgent):
             return action
         
     def act(self, state, reward=0):
-        """
-        This function represents the actual decision-making process of the agent. Given a 'state' and, possibly, a 'reward'
-        the agent returns an action to take in that state.
-        :param state: the state on which to act
-        :param reward: the reward computed together with the state (i.e. the reward on the previous action). Useful for learning
-        :params
-        :return:
-        """
         
         # Convert state to hashed state
         state = np_hash(state)
@@ -78,19 +70,13 @@ class MCAgent(AbstractAgent):
         return action
         
     def onEpisodeEnd(self, iteration_counter):
-        """
-        This function can be exploited to allow the agent to perform some internal process (e.g. learning-related) at the
-        end of an episode.
-        :param reward_list: Rewards collected during episode
-        :param episode: the episode number
-        :return:
-        """
         # Initialize G
         g_value = 0
         
         # Go over lists rewards, from T-1 to 0
         for t in range(iteration_counter - 2, -1, -1):
-            
+            if t == iteration_counter-2:
+                print(self.rewards_list[t+1])
             # G <- gamma G + R_{t+1}
             g_value = self.gamma * g_value + self.rewards_list[t+1]
             # Get this timestep's state and action
@@ -111,6 +97,9 @@ class MCAgent(AbstractAgent):
             # Change exploration rate 
             self.eps *= 0.5
             print(f"Changing eps to {self.eps}")
+            
+        # Reset the lists
+        self.reset_lists()
             
                 
     def onIterationEnd(self, iteration_counter, next_state):
